@@ -1,0 +1,12 @@
+[project]
+name = "ai-shorts-editor"
+version = "0.1.0"
+description = "Local CLI-first MVP for AI-generated food and travel shorts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.13.3",
+  "python-dotenv>=1.2.2",
+  "twelvelabs",
+  "uuid6>=2025.0.1",
+]

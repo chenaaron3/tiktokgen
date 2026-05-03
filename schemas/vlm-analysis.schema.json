@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-shorts-editor.local/schemas/vlm-analysis.schema.json",
+  "title": "AI Shorts Editor VLM Analysis",
+  "description": "Generic, orchestration-free content analysis for one or more source videos.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analyzedAt", "provider", "clips"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.3.0"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "analyzedAt": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "model", "rawResponseRef"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "rawResponseRef": {
+          "type": "string"
+        }
+      }
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourcePath",
+          "originalFilename",
+          "durationSec",
+          "capturedAt",
+          "location",
+          "media",
+          "twelveLabs",
+          "summary",
+          "moments"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "originalFilename": {
+            "type": "string"
+          },
+          "durationSec": {
+            "type": ["number", "null"]
+          },
+          "capturedAt": {
+            "type": ["string", "null"]
+          },
+          "location": {
+            "type": ["object", "null"]
+          },
+          "media": {
+            "type": "object"
+          },
+          "twelveLabs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["assetId", "taskId"],
+            "properties": {
+              "assetId": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          },
+          "moments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "momentId",
+                "startSec",
+                "endSec",
+                "description",
+                "subjects",
+                "actions",
+                "visibleText",
+                "spokenText",
+                "audio",
+                "quality",
+                "issues",
+                "whyUseful"
+              ],
+              "properties": {
+                "momentId": {
+                  "type": "string"
+                },
+                "startSec": {
+                  "type": "number"
+                },
+                "endSec": {
+                  "type": "number"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "subjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "visibleText": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "spokenText": {
+                  "type": "string"
+                },
+                "audio": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["great", "good", "okay", "poor"]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "whyUseful": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
