@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .media import discover_videos, probe_media
+from .providers import TwelveLabsVideoAnalysisBackend, VideoAnalysisBackend
 from .schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
 from .twelvelabs import TwelveLabsVideoAnalyzer
 
@@ -15,6 +16,8 @@ __all__ = [
     "TwelveLabsClipRef",
     "TwelveLabsVideoAnalyzer",
     "VlmAnalysis",
+    "TwelveLabsVideoAnalysisBackend",
+    "VideoAnalysisBackend",
     "discover_videos",
     "probe_media",
     "run_analysis",

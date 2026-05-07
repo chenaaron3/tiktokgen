@@ -10,7 +10,7 @@ Local CLI-first MVP for turning food and travel clips into 30-45 second vertical
 
 ## Prototype Artifacts
 
-- `schemas/edit-plan.schema.json`: minimal Remotion edit-plan schema.
+- `schemas/edit-plan.schema.json`: legacy Remotion plan (superseded by `render-plan.json` from `scripts/edit`).
 - `scripts/vlm/schema.py`: Pydantic models for VLM analysis JSON (`model_json_schema()`, `model_validate()`).
 
 ## Python Modules
@@ -18,7 +18,11 @@ Local CLI-first MVP for turning food and travel clips into 30-45 second vertical
 Shared Python code is grouped under `scripts/`:
 
 - `scripts/vlm/`: VLM analysis, media probing, TwelveLabs provider, and VLM schema exports.
-- `scripts/edit/`: edit-plan generation and edit-plan schema exports.
+- `scripts/edit/`: `shot-match.json` (LLM / review) and deterministic `render-plan.json`.
+- `scripts/narrative/`: script LLM, ElevenLabs TTS, faster-whisper word timings, sentence ledger.
+- `scripts/contracts.py`: shared sentence/token DTOs.
+- `scripts/project_inputs.py`: bundled folder resolution (clips + `notes.txt` / lone `.txt`).
+- `scripts/fixtures/pipeline.py`: sample words + sample `ShotMatch` for tests.
 - `scripts/logger/`: local LiteLLM observability logger.
 
 VLM only (`source` may be **one video** or a **directory**; writes `cache/<run-uuid>/vlm-analysis.json`):
@@ -35,26 +39,52 @@ uv sync
 npm install
 ```
 
-Run analysis, edit planning, and Remotion rendering in one command:
+Run the **narrative pipeline** (script → TTS → Whisper → VLM → shot-match LLM → deterministic `render-plan.json` → Remotion).
+
+**Explicit run folder:**
 
 ```sh
-uv run python scripts/render_short.py assets/2026-05-02 \
-  --guidance "make this a stylish West Village afternoon"
+PYTHONPATH=scripts uv run python scripts/render_short.py path/to/footage \
+  --run-dir cache/my-run \
+  --notes-file notes.txt \
+  --auto-approve-script \
+  --guidance "stylish West Village pacing"
 ```
 
-The harness creates a new `cache/<run-id>/` folder, writes `vlm-analysis.json`, `edit-plan.json`, `edit-outline.txt`, LiteLLM observability logs, and renders `render.mp4`. It requires both `TWELVELABS_API_KEY` and `OPENAI_API_KEY` in `.env`.
+**Project folder** (videos + notes in the **same directory** — e.g. `assets/05-03`): omit `--notes-file`. Prefer `notes.txt`, otherwise exactly **one** non-readme story `*.txt`.
+
+```sh
+PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
+  --auto-approve-script
+```
+
+**New UUID run** (`--cache-dir/<uuid>/` when you omit `--run-dir` / `--resume`): by default SOURCE is analyzed as footage only—still pass **`--notes-file`** unless SOURCE is the bundled **project folder** pattern above:
+
+```sh
+PYTHONPATH=scripts uv run python scripts/render_short.py path/to/clips-folder \
+  --notes-file ./notes.txt \
+  --auto-approve-script
+```
+
+**Resume latest run:** reuse the subdirectory of `--cache-dir` that was modified most recently (do not combine with `--run-dir`):
+
+```sh
+PYTHONPATH=scripts uv run python scripts/render_short.py path/to/footage \
+  --resume \
+  --auto-approve-script
+```
+
+Artifacts land under your chosen `--run-dir` or under `cache/<uuid>/` / the resumed folder (`script.txt`, `voiceover.mp3`, etc.; see below).
+
+Env vars: `TWELVELABS_API_KEY`, `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`. Optional override: `ELEVENLABS_VOICE_ID` (defaults to the same ElevenLabs voice id as shortgen: `NFG5qt843uXKj4pFvR7C`).
 
 The VLM stage needs **ffmpeg** when a clip is under TwelveLabs' ~4s minimum: those files are lengthened using a freeze-frame/audio-pad tail, then analyzed; **outputs still reference your original paths and durations.** Each clip payload is the restaurant `identified_shots` taxonomy (`scripts/vlm/schema.py`).
 
-The edit planner validates the VLM JSON, uses LiteLLM to ask for a story outline, then writes an editable `edit-plan.json`. Full LLM request/response payloads are saved under `cache/<run-id>/llm-observability/`.
+Shot matching is a **single LiteLLM JSON call** producing reviewable `shot-match.json`. Assembly is deterministic and writes `render-plan.json` (beats w/ `playbackRate`, voice static path, Whisper word captions). Logs under `llm-observability/`.
 
-The edit plan is intentionally small:
+**Unit tests:** `uv sync --group dev` then `uv run pytest`.
 
-- `theme`: H1 story promise and opening hook text.
-- `locations`: H2 location sections derived from clip metadata when available.
-- `segments`: flat H3 timeline clips linked to locations by `locationId`.
-- `text`: sparse timed text overlays.
-- `assumptions` and `warnings`: inferred details and caveats.
+Service calls are behind **protocols** (`narrative.providers`, `edit.providers`, `vlm.providers`) so tests can inject mocks.
 
 Open the Remotion Studio/editor:
 
@@ -62,37 +92,14 @@ Open the Remotion Studio/editor:
 npm run dev
 ```
 
-Render the generated edit plan:
+Render manually (the harness already invokes this after copying media into `remotion/public/`):
 
 ```sh
-npm run render -- cache/<run-id>/render.mp4 --props "$(python -c 'from pathlib import Path; print(Path("cache/<run-id>/edit-plan.json").read_text())')"
+npm run render -- cache/<run-id>/render.mp4 --props "$(python -c 'from pathlib import Path; print(Path("cache/<run-id>/render-plan.json").read_text())')"
 ```
 
-Choose a different output path by changing the first argument after `--`:
+Remotion composition `AiShort` reads `render-plan.json` (voice + beats + word captions).
 
-```sh
-npm run render -- output/my-short.mp4 --props "$(python -c 'from pathlib import Path; print(Path("cache/<run-id>/edit-plan.json").read_text())')"
-```
+To continue a fixed run folder, pass **`--run-dir`**. Existing files skip their stages (for example cached `vlm-analysis.json`, `shot-match.json`, `voiceover.mp3`).
 
-The full pipeline harness runs this package command for you after generating `edit-plan.json`. The first Remotion template renders a 1080x1920 vertical short, sequences the plan's source segments, applies simple crop values, and overlays the theme/text. Voiceover, captions, music, and Whisper timing are intentionally deferred.
-
-To resume a known run folder and skip completed stages, pass `--run-dir`:
-
-```sh
-uv run python scripts/render_short.py assets/2026-05-02 \
-  --run-dir cache/west-village-test \
-  --guidance "make this a stylish West Village afternoon"
-```
-
-If `cache/west-village-test/vlm-analysis.json` exists, VLM analysis is skipped. If `cache/west-village-test/edit-plan.json` exists, edit planning is skipped.
-
-You can pass through common controls:
-
-```sh
-uv run python scripts/render_short.py assets/2026-05-02 \
-  --run-dir cache/west-village-test \
-  --guidance "make this a stylish West Village afternoon" \
-  --max-concurrency 3 \
-  --target-duration 30 \
-  --render-output output/west-village.mp4
-```
+Alternatively use **`--resume`** instead of **`--run-dir`** to reuse the newest run folder under **`--cache-dir`** (see above).

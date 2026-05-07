@@ -1,5 +1,6 @@
 import {
   AbsoluteFill,
+  Audio,
   Composition,
   OffthreadVideo,
   Sequence,
@@ -9,49 +10,48 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import { useMemo } from 'react';
 
-type Crop = {
-  x: number;
-  y: number;
-  scale: number;
+export type RenderWord = {
+  word: string;
+  startSec: number;
+  endSec: number;
 };
 
-type Segment = {
-  id: string;
+export type RenderBeat = {
+  beatId: string;
+  sentenceId: string;
+  clipId: string;
+  momentId: string;
   sourcePath: string;
   sourceStartSec: number;
   sourceEndSec: number;
   timelineStartSec: number;
   timelineEndSec: number;
-  crop?: Crop;
+  playbackRate: number;
 };
 
-type TextOverlay = {
-  id: string;
-  text: string;
-  timelineStartSec: number;
-  timelineEndSec: number;
-  position: 'top' | 'center' | 'bottom';
-};
-
-type EditPlan = {
+export type RenderPlanProps = {
+  schemaVersion?: string;
   durationSec: number;
+  voiceoverStaticPath: string;
   theme?: {
-    title?: string;
     hookText?: string;
   };
-  segments?: Segment[];
-  text?: TextOverlay[];
+  beats: RenderBeat[];
+  words: RenderWord[];
 };
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const FPS = 30;
-const DEFAULT_PLAN: EditPlan = {
+
+const EMPTY_PLAN: RenderPlanProps = {
   durationSec: 35,
-  theme: { title: 'AI Shorts Editor', hookText: 'AI Shorts Editor' },
-  segments: [],
-  text: [],
+  voiceoverStaticPath: '',
+  theme: { hookText: '' },
+  beats: [],
+  words: [],
 };
 
 const fileUrl = (sourcePath: string) => {
@@ -67,99 +67,156 @@ const fileUrl = (sourcePath: string) => {
   return encodeURI(`file://${sourcePath}`);
 };
 
-const secondsToFrames = (seconds: number, fps: number) => Math.max(0, Math.round(seconds * fps));
+const secondsToFrames = (seconds: number, fps: number) =>
+  Math.max(0, Math.round(seconds * fps));
 
-const overlayPosition = (position: TextOverlay['position']) => {
-  if (position === 'top') {
-    return { top: 160 };
-  }
-  if (position === 'center') {
-    return { top: '45%' };
-  }
-  return { bottom: 210 };
+/**
+ * Lay out beats on an integer-frame grid without gaps between consecutive beats.
+ * Independent rounding of each beat's start/duration causes 1-frame (or more)
+ * holes at sentence boundaries → black flashes on a black Composition background.
+ */
+const layoutBeatFrames = (
+  sortedBeats: RenderBeat[],
+  fps: number,
+): { beat: RenderBeat; from: number; dur: number }[] => {
+  let cursorFrame = 0;
+  return sortedBeats.map((beat, i) => {
+    const endFrame = secondsToFrames(beat.timelineEndSec, fps);
+    if (i === 0) {
+      cursorFrame = secondsToFrames(beat.timelineStartSec, fps);
+    }
+    const from = cursorFrame;
+    const safeEndFrame = Math.max(endFrame, from + 1);
+    const dur = safeEndFrame - from;
+    cursorFrame = from + dur;
+    return { beat, from, dur };
+  });
 };
 
-const TextCard: React.FC<{
-  children: React.ReactNode;
-  position?: TextOverlay['position'];
-}> = ({ children, position = 'bottom' }) => {
+const WordCaption: React.FC<{ activeWord: RenderWord | null }> = ({ activeWord }) => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 8, 45, 58], [0, 1, 1, 0], {
+  const opacity = interpolate(frame, [0, 6], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-
+  const text = activeWord?.word ?? '';
   return (
     <div
       style={{
         position: 'absolute',
-        left: 72,
-        right: 72,
-        ...overlayPosition(position),
-        opacity,
-        color: 'white',
+        bottom: 120,
+        left: 48,
+        right: 48,
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.92)',
         fontFamily: 'Inter, Helvetica, Arial, sans-serif',
-        fontSize: 58,
-        fontWeight: 700,
-        lineHeight: 1.02,
-        letterSpacing: -1.6,
-        textShadow: '0 8px 32px rgba(0,0,0,0.65)',
+        fontSize: 42,
+        fontWeight: 500,
+        letterSpacing: 0.2,
+        opacity,
+        textShadow: '0 4px 20px rgba(0,0,0,0.75)',
       }}
     >
-      {children}
+      {text}
     </div>
   );
 };
 
-const PlanVideo: React.FC<EditPlan> = (plan) => {
+const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
   const { fps } = useVideoConfig();
-  const segments = [...(plan.segments ?? [])].sort((a, b) => a.timelineStartSec - b.timelineStartSec);
-  const overlays = plan.text ?? [];
-  const hookText = plan.theme?.hookText || plan.theme?.title;
+  const frame = useCurrentFrame();
+  const t = frame / fps;
+
+  const sortedBeats = useMemo(
+    () =>
+      [...(plan.beats ?? [])].sort(
+        (a, b) =>
+          a.timelineStartSec - b.timelineStartSec ||
+          a.beatId.localeCompare(b.beatId),
+      ),
+    [plan.beats],
+  );
+  const beatLayouts = useMemo(
+    () => layoutBeatFrames(sortedBeats, fps),
+    [sortedBeats, fps],
+  );
+
+  const hook = plan.theme?.hookText ?? '';
+  const words = plan.words ?? [];
+
+  const activeWord =
+    words.find((w) => t >= w.startSec && t < w.endSec) ?? null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
-      {segments.map((segment) => {
-        const from = secondsToFrames(segment.timelineStartSec, fps);
-        const duration = secondsToFrames(segment.timelineEndSec - segment.timelineStartSec, fps);
-        const startFrom = secondsToFrames(segment.sourceStartSec, fps);
-        const endAt = secondsToFrames(segment.sourceEndSec, fps);
-        const crop = segment.crop ?? { x: 0.5, y: 0.5, scale: 1 };
+      {beatLayouts.map(({ beat, from, dur }) => {
+        const startFrom = secondsToFrames(beat.sourceStartSec, fps);
+        const endAt = secondsToFrames(beat.sourceEndSec, fps);
+        const sourceDurationSec = beat.sourceEndSec - beat.sourceStartSec;
+        const timelineOutSec = dur / fps;
+        const rateFromTiming =
+          sourceDurationSec > 0 && timelineOutSec > 0
+            ? sourceDurationSec / timelineOutSec
+            : null;
+        const rate =
+          rateFromTiming != null &&
+          Number.isFinite(rateFromTiming) &&
+          rateFromTiming > 0
+            ? rateFromTiming
+            : typeof beat.playbackRate === 'number' && beat.playbackRate > 0
+              ? beat.playbackRate
+              : 1;
 
         return (
-          <Sequence key={segment.id} from={from} durationInFrames={duration}>
+          <Sequence key={beat.beatId} from={from} durationInFrames={dur}>
             <OffthreadVideo
-              src={fileUrl(segment.sourcePath)}
+              src={fileUrl(beat.sourcePath)}
               startFrom={startFrom}
               endAt={endAt}
               muted
+              playbackRate={rate}
               style={{
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                objectPosition: `${crop.x * 100}% ${crop.y * 100}%`,
-                transform: `scale(${crop.scale})`,
               }}
             />
           </Sequence>
         );
       })}
 
-      {hookText ? (
-        <Sequence from={0} durationInFrames={secondsToFrames(Math.min(3.2, plan.durationSec), fps)}>
-          <TextCard position="bottom">{hookText}</TextCard>
+      {plan.voiceoverStaticPath ? (
+        <Audio src={fileUrl(plan.voiceoverStaticPath)} />
+      ) : null}
+
+      {hook ? (
+        <Sequence from={0} durationInFrames={secondsToFrames(Math.min(3, plan.durationSec), fps)}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 132,
+              left: 52,
+              right: 52,
+              color: 'white',
+              fontFamily: 'Inter, Helvetica, Arial, sans-serif',
+              fontSize: 52,
+              fontWeight: 900,
+              lineHeight: 1.18,
+              textAlign: 'center',
+              letterSpacing: -0.5,
+              textShadow: '0 2px 0 rgba(0,0,0,0.5), 0 10px 36px rgba(0,0,0,0.55)',
+              opacity: interpolate(frame, [0, 15, 40, 60], [0, 1, 1, 0], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+              }),
+            }}
+          >
+            {hook}
+          </div>
         </Sequence>
       ) : null}
 
-      {overlays.map((overlay) => (
-        <Sequence
-          key={overlay.id}
-          from={secondsToFrames(overlay.timelineStartSec, fps)}
-          durationInFrames={secondsToFrames(overlay.timelineEndSec - overlay.timelineStartSec, fps)}
-        >
-          <TextCard position={overlay.position}>{overlay.text}</TextCard>
-        </Sequence>
-      ))}
+      <WordCaption activeWord={activeWord} />
     </AbsoluteFill>
   );
 };
@@ -168,17 +225,17 @@ export const RemotionRoot: React.FC = () => {
   return (
     <Composition
       id="AiShort"
-      component={PlanVideo}
+      component={AiShortComposition}
       width={WIDTH}
       height={HEIGHT}
       fps={FPS}
-      durationInFrames={secondsToFrames(DEFAULT_PLAN.durationSec, FPS)}
-      defaultProps={DEFAULT_PLAN}
+      durationInFrames={secondsToFrames(EMPTY_PLAN.durationSec, FPS)}
+      defaultProps={EMPTY_PLAN}
       calculateMetadata={({ props }) => {
-        const typedProps = props as EditPlan;
-        const durationSec = typedProps.durationSec ?? DEFAULT_PLAN.durationSec;
+        const p = props as RenderPlanProps;
+        const dur = p.durationSec ?? EMPTY_PLAN.durationSec;
         return {
-          durationInFrames: secondsToFrames(durationSec, FPS),
+          durationInFrames: secondsToFrames(dur, FPS),
           fps: FPS,
           width: WIDTH,
           height: HEIGHT,
