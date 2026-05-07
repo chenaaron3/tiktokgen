@@ -1,0 +1,377 @@
+{
+  "$defs": {
+    "Crop": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y",
+          "type": "number"
+        },
+        "scale": {
+          "minimum": 1.0,
+          "title": "Scale",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "scale"
+      ],
+      "title": "Crop",
+      "type": "object"
+    },
+    "LocationSection": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "opening",
+            "setup",
+            "main",
+            "texture",
+            "ending"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        },
+        "timelineStartSec": {
+          "title": "Timelinestartsec",
+          "type": "number"
+        },
+        "timelineEndSec": {
+          "title": "Timelineendsec",
+          "type": "number"
+        },
+        "segmentIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Segmentids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "role",
+        "summary",
+        "timelineStartSec",
+        "timelineEndSec",
+        "segmentIds"
+      ],
+      "title": "LocationSection",
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locationId": {
+          "title": "Locationid",
+          "type": "string"
+        },
+        "clipId": {
+          "title": "Clipid",
+          "type": "string"
+        },
+        "momentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Momentid"
+        },
+        "sourcePath": {
+          "title": "Sourcepath",
+          "type": "string"
+        },
+        "sourceStartSec": {
+          "minimum": 0.0,
+          "title": "Sourcestartsec",
+          "type": "number"
+        },
+        "sourceEndSec": {
+          "minimum": 0.0,
+          "title": "Sourceendsec",
+          "type": "number"
+        },
+        "timelineStartSec": {
+          "minimum": 0.0,
+          "title": "Timelinestartsec",
+          "type": "number"
+        },
+        "timelineEndSec": {
+          "minimum": 0.0,
+          "title": "Timelineendsec",
+          "type": "number"
+        },
+        "role": {
+          "enum": [
+            "hook",
+            "setup",
+            "context",
+            "signature",
+            "detail",
+            "texture",
+            "ambience",
+            "transition",
+            "payoff",
+            "ending"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "visualType": {
+          "enum": [
+            "closeup",
+            "wide",
+            "detail",
+            "action",
+            "people",
+            "sign",
+            "pov",
+            "food",
+            "storefront",
+            "ambience"
+          ],
+          "title": "Visualtype",
+          "type": "string"
+        },
+        "pacing": {
+          "enum": [
+            "fast",
+            "medium",
+            "hold"
+          ],
+          "title": "Pacing",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "crop": {
+          "$ref": "#/$defs/Crop"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "locationId",
+        "clipId",
+        "sourcePath",
+        "sourceStartSec",
+        "sourceEndSec",
+        "timelineStartSec",
+        "timelineEndSec",
+        "role",
+        "visualType",
+        "pacing",
+        "label",
+        "crop",
+        "reason"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "TextOverlay": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "timelineStartSec": {
+          "minimum": 0.0,
+          "title": "Timelinestartsec",
+          "type": "number"
+        },
+        "timelineEndSec": {
+          "minimum": 0.0,
+          "title": "Timelineendsec",
+          "type": "number"
+        },
+        "position": {
+          "enum": [
+            "top",
+            "center",
+            "bottom"
+          ],
+          "title": "Position",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "timelineStartSec",
+        "timelineEndSec",
+        "position"
+      ],
+      "title": "TextOverlay",
+      "type": "object"
+    },
+    "Theme": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "hookText": {
+          "title": "Hooktext",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "hookText"
+      ],
+      "title": "Theme",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "0.1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "runId": {
+      "title": "Runid",
+      "type": "string"
+    },
+    "sourceAnalysisRef": {
+      "title": "Sourceanalysisref",
+      "type": "string"
+    },
+    "createdAt": {
+      "title": "Createdat",
+      "type": "string"
+    },
+    "guidance": {
+      "title": "Guidance",
+      "type": "string"
+    },
+    "theme": {
+      "$ref": "#/$defs/Theme"
+    },
+    "durationSec": {
+      "exclusiveMinimum": 0.0,
+      "title": "Durationsec",
+      "type": "number"
+    },
+    "locations": {
+      "items": {
+        "$ref": "#/$defs/LocationSection"
+      },
+      "title": "Locations",
+      "type": "array"
+    },
+    "segments": {
+      "items": {
+        "$ref": "#/$defs/Segment"
+      },
+      "title": "Segments",
+      "type": "array"
+    },
+    "text": {
+      "items": {
+        "$ref": "#/$defs/TextOverlay"
+      },
+      "title": "Text",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "runId",
+    "sourceAnalysisRef",
+    "createdAt",
+    "guidance",
+    "theme",
+    "durationSec",
+    "locations",
+    "segments",
+    "text",
+    "assumptions",
+    "warnings"
+  ],
+  "title": "EditPlan",
+  "type": "object"
+}

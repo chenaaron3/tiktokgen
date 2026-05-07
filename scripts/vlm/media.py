@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -154,3 +156,61 @@ def probe_media(video_path: Path) -> dict[str, Any]:
         "orientation": orientation,
         "captureMetadata": parse_capture_metadata(data),
     }
+
+
+def extend_video_below_minimum_twelvelabs_duration(
+    video_path: Path,
+    *,
+    minimum_sec: float,
+    epsilon_sec: float = 0.25,
+) -> tuple[Path, Path | None]:
+    """Return ``(path_to_upload, path_to_delete_after_upload)``.
+
+    If duration is unknown or already ≥ ``minimum_sec``, returns ``(video_path, None)``.
+
+    Otherwise builds a temporary MP4 that **holds the last frame** (and silent / apad audio tail)
+    so total duration reaches at least ``minimum_sec + epsilon_sec``. Unlink the second path when
+    not ``None``. Timestamps on the original portion match the source.
+    """
+    media = probe_media(video_path)
+    duration = media.get("durationSec")
+    if duration is None or duration >= minimum_sec:
+        return (video_path, None)
+
+    pad_sec = minimum_sec - float(duration) + epsilon_sec
+
+    descriptor, tmp_name = tempfile.mkstemp(prefix="vlm_twelvelabs_extend_", suffix=".mp4")
+    os.close(descriptor)
+    out_path = Path(tmp_name)
+
+    vf = f"tpad=stop_mode=clone:stop_duration={pad_sec}"
+    cmd: list[str] = [
+        "ffmpeg",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vf",
+        vf,
+    ]
+    if media.get("hasAudio"):
+        cmd += ["-af", f"apad=pad_dur={pad_sec}", "-c:v", "libx264", "-c:a", "aac"]
+    else:
+        cmd += ["-c:v", "libx264", "-an"]
+    cmd += ["-movflags", "+faststart", str(out_path)]
+
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except FileNotFoundError as exc:
+        out_path.unlink(missing_ok=True)
+        raise RuntimeError("ffmpeg not found on PATH (required to extend short clips)") from exc
+    except subprocess.CalledProcessError as exc:
+        out_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"ffmpeg failed to extend {video_path.name}: {exc.stderr or exc.stdout or exc}"
+        ) from exc
+
+    return (out_path, out_path)

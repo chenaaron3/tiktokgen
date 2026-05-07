@@ -1,0 +1,37 @@
+{
+  "name": "ai-editor",
+  "version": "1.0.0",
+  "description": "Local CLI-first MVP for turning food and travel clips into 30-45 second vertical aesthetic b-roll shorts.",
+  "private": true,
+  "main": "remotion/src/index.tsx",
+  "scripts": {
+    "dev": "remotion studio remotion/src/index.tsx",
+    "viewer:dev": "npm run dev --prefix viewer",
+    "studio": "remotion studio remotion/src/index.tsx",
+    "compositions": "remotion compositions remotion/src/index.tsx",
+    "render": "remotion render remotion/src/index.tsx AiShort"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenaaron3/tiktokgen.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/chenaaron3/tiktokgen/issues"
+  },
+  "homepage": "https://github.com/chenaaron3/tiktokgen#readme",
+  "dependencies": {
+    "@remotion/cli": "^4.0.456",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "remotion": "^4.0.456"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
+  }
+}

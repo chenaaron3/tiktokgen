@@ -5,3 +5,6 @@ __pycache__/
 analysis/
 cache/
 assets/
+node_modules/
+dist/
+out/

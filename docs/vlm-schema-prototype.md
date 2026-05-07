@@ -6,9 +6,7 @@ The VLM schema is a generic map of one or more source videos. It should describe
 
 It should not decide how to edit the video. Orchestration, pacing, captions, framing, and final clip selection belong in a later planner.
 
-Schema file: `../schemas/vlm-analysis.schema.json`
-
-Example output: `../examples/vlm-analysis.example.json`
+Schema and serialization are defined in code: `scripts/vlm/schema.py` (`VlmAnalysis`, `Clip`, `IdentifiedShot`). Use `model_json_schema()` / `model_validate()` instead of checking in a standalone JSON Schema file.
 
 ## Core Question
 
