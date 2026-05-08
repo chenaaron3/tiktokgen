@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contracts import WordToken
-from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef, ShotSentenceLine
+from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
 
 # Pass into narrative.build_sentence_ledger
 PIPELINE_SAMPLE_WORDS: list[WordToken] = [
@@ -13,11 +13,10 @@ PIPELINE_SAMPLE_WORDS: list[WordToken] = [
 
 # Example shot-match pairing one sentence ↔ one `(clipId, momentId)`
 PIPELINE_SAMPLE_SHOT_MATCH = ShotMatch(
-    schemaVersion="0.2.0",
-    sentences=[ShotSentenceLine(sentenceId="s0", text="Great bite.")],
     assignments=[
         SentenceAssignment(
             sentenceId="s0",
+            text="Great bite.",
             shots=[ShotRef(clipId="fixture-clip-id", momentId="fixture-moment-id")],
         ),
     ],

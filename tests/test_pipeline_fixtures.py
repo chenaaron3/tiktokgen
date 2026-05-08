@@ -10,4 +10,4 @@ def test_fixture_words_produce_ledger():
 
 
 def test_fixture_shot_match_validates():
-    assert PIPELINE_SAMPLE_SHOT_MATCH.schema_version == "0.2.0"
+    assert PIPELINE_SAMPLE_SHOT_MATCH.assignments

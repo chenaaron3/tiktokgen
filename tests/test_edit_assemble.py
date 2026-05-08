@@ -1,5 +1,5 @@
 from edit.assemble import assemble_render_plan
-from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef, ShotSentenceLine
+from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
 from edit.vlm_shots import build_vlm_shots_for_prompt
 from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
 
@@ -27,7 +27,6 @@ def _analysis() -> VlmAnalysis:
         identifiedShots=[shot],
     )
     return VlmAnalysis(
-        schemaVersion="0.4.1",
         runId="r",
         analyzedAt="t",
         provider=Provider(name="p", model="m", rawResponseRef=""),
@@ -62,13 +61,12 @@ def test_assemble_requires_matching_shot_count():
         ]
     )
     bad = ShotMatch(
-        schemaVersion="0.2.0",
-        sentences=[ShotSentenceLine(sentenceId="s0", text="Hi.")],
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
+                text="Hi.",
                 shots=[],
-            )
+            ),
         ],
     )
     try:
@@ -122,18 +120,15 @@ def test_happy_assemble_matches_fixture_pipeline():
     )
 
     shot_match = ShotMatch(
-        schemaVersion="0.2.0",
-        sentences=[
-            ShotSentenceLine(sentenceId="s0", text="Hello."),
-            ShotSentenceLine(sentenceId="s1", text="Again."),
-        ],
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
+                text="Hello.",
                 shots=[ShotRef(clipId="c0", momentId="m1")],
             ),
             SentenceAssignment(
                 sentenceId="s1",
+                text="Again.",
                 shots=[ShotRef(clipId="c0", momentId="m2")],
             ),
         ],

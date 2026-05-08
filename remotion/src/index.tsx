@@ -32,7 +32,6 @@ export type RenderBeat = {
 };
 
 export type RenderPlanProps = {
-  schemaVersion?: string;
   durationSec: number;
   voiceoverStaticPath: string;
   theme?: {

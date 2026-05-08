@@ -1,7 +1,7 @@
 """Shot-match orchestrator stub (no LiteLLM)."""
 
 from contracts import SentenceEntry, SentenceLedger
-from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef, ShotSentenceLine
+from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
 from edit.shot_match_llm import StaticShotMatchOrchestrator
 from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
 
@@ -29,7 +29,6 @@ def _mini_analysis() -> VlmAnalysis:
         identifiedShots=[shot],
     )
     return VlmAnalysis(
-        schemaVersion="0.4.1",
         runId="r",
         analyzedAt="t",
         provider=Provider(name="p", model="m", rawResponseRef=""),
@@ -52,11 +51,10 @@ def test_static_shot_match_orchestrator():
     )
 
     fake = ShotMatch(
-        schemaVersion="0.2.0",
-        sentences=[ShotSentenceLine(sentenceId="s0", text="Hi.")],
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
+                text="Hi.",
                 shots=[ShotRef(clipId="c0", momentId="m1")],
             ),
         ],

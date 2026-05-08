@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 
 from contracts import SentenceLedger, WordToken
 from edit.schema_render_plan import RenderBeat, RenderPlan, RenderTheme, RenderWord
-from edit.schema_shot_match import ShotMatch
+from edit.schema_shot_match import ShotMatch, ShotRef
 from vlm.schema import Clip, IdentifiedShot, VlmAnalysis
 
 
@@ -65,6 +65,41 @@ def resolve_source_window(
     return s, e
 
 
+def validate_shots(
+    *,
+    shot_match: ShotMatch,
+    sentence_ledger: SentenceLedger,
+    moments: Mapping[tuple[str, str], tuple[Clip, IdentifiedShot]],
+    assignment_by_sentence: Mapping[str, Sequence[ShotRef]],
+) -> None:
+    """Raise ``ValueError`` if shot-match disagrees with the ledger or references unknown VLM shots."""
+    ledger_sentences = {(row.sentence_id, row.text.strip()) for row in sentence_ledger.sentences}
+    shot_sentences = {(row.sentence_id, row.text.strip()) for row in shot_match.assignments}
+    if ledger_sentences != shot_sentences:
+        raise ValueError(
+            "shot-match sentences do not match ledger (ids or trimmed text differ): "
+            f"only in ledger {sorted(ledger_sentences - shot_sentences)!r}; "
+            f"only in shot-match {sorted(shot_sentences - ledger_sentences)!r}"
+        )
+
+    ordered = sorted(sentence_ledger.sentences, key=lambda row: row.speech_start_sec)
+    for sentence in ordered:
+        sid = sentence.sentence_id
+        shots_assignment = assignment_by_sentence.get(sid)
+        if shots_assignment is None:
+            raise ValueError(f"missing assignments for sentence {sid!r}")
+        beat_expected = sentence.beat_count
+        if len(shots_assignment) != beat_expected:
+            raise ValueError(
+                f"sentence {sid!r}: expected {beat_expected} shots, got {len(shots_assignment)}"
+            )
+        for shot_ref in shots_assignment:
+            if moments.get((shot_ref.clip_id, shot_ref.moment_id)) is None:
+                raise ValueError(
+                    f"unknown shot clip={shot_ref.clip_id!r} moment={shot_ref.moment_id!r}"
+                )
+
+
 def assemble_render_plan(
     *,
     shot_match: ShotMatch,
@@ -79,17 +114,17 @@ def assemble_render_plan(
 ) -> RenderPlan:
     """Build RenderPlan + validate beats / assignments / lengths."""
     moments = _moment_map(analysis)
-    assignment_by_sentence: Mapping[str, list] = {
+    # Maps sentence ID to list of shots
+    assignment_by_sentence: Mapping[str, list[ShotRef]] = {
         row.sentence_id: list(row.shots) for row in shot_match.assignments
     }
 
-    ledger_text = {row.sentence_id: row.text for row in sentence_ledger.sentences}
-    sm_text = {row.sentence_id: row.text for row in shot_match.sentences}
-    for sid, lt in ledger_text.items():
-        if sid in sm_text and sm_text[sid].strip() != lt.strip():
-            raise ValueError(
-                f"shot-match sentence text for {sid!r} does not match ledger (approval sync issue)"
-            )
+    validate_shots(
+        shot_match=shot_match,
+        sentence_ledger=sentence_ledger,
+        moments=moments,
+        assignment_by_sentence=assignment_by_sentence,
+    )
 
     warnings: list[str] = []
     beats_out: list[RenderBeat] = []
@@ -100,15 +135,9 @@ def assemble_render_plan(
 
     for si, sentence in enumerate(ordered):
         sid = sentence.sentence_id
-        shots_assignment = assignment_by_sentence.get(sid)
-        if shots_assignment is None:
-            raise ValueError(f"missing assignments for sentence {sid!r}")
+        shots_assignment = assignment_by_sentence[sid]
 
         beat_expected = sentence.beat_count
-        if len(shots_assignment) != beat_expected:
-            raise ValueError(
-                f"sentence {sid!r}: expected {beat_expected} shots, got {len(shots_assignment)}"
-            )
 
         sd = speech_duration(sentence)
         ceil_sd = math.ceil(sd - 1e-12)
@@ -126,12 +155,7 @@ def assemble_render_plan(
 
         for j in range(beat_expected):
             shot_ref = shots_assignment[j]
-            lookup = moments.get((shot_ref.clip_id, shot_ref.moment_id))
-            if lookup is None:
-                raise ValueError(
-                    f"unknown shot clip={shot_ref.clip_id!r} moment={shot_ref.moment_id!r}"
-                )
-            clip_obj, identified = lookup
+            clip_obj, identified = moments[shot_ref.clip_id, shot_ref.moment_id]
 
             last_beat_in_sentence = j == beat_expected - 1
 
@@ -200,7 +224,6 @@ def assemble_render_plan(
     )
 
     return RenderPlan(
-        schemaVersion="0.2.1",
         runId=run_id,
         createdAt=created_at,
         durationSec=duration_sec,

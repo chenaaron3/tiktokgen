@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -78,7 +78,6 @@ class Clip(BaseModel):
 class VlmAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["0.4.1"] = Field(alias="schemaVersion")
     run_id: str = Field(alias="runId")
     analyzed_at: str = Field(alias="analyzedAt")
     provider: Provider

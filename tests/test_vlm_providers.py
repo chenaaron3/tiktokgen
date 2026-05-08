@@ -34,7 +34,6 @@ def _minimal_fake_analysis(source: Path) -> dict:
         ],
     }
     return {
-        "schemaVersion": "0.4.1",
         "runId": "fake-run",
         "analyzedAt": "2026-01-01T00:00:00+00:00",
         "provider": {"name": "fake", "model": "fake", "rawResponseRef": "stub"},

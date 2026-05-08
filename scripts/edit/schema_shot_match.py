@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class ShotSentenceLine(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    sentence_id: str = Field(alias="sentenceId")
-    text: str
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ShotRef(BaseModel):
@@ -22,9 +15,12 @@ class ShotRef(BaseModel):
 
 
 class SentenceAssignment(BaseModel):
+    """One narration sentence plus its ordered b-roll picks."""
+
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     sentence_id: str = Field(alias="sentenceId")
+    text: str
     shots: list[ShotRef]
 
 
@@ -33,6 +29,11 @@ class ShotMatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    schema_version: Literal["0.2.0"] = Field(alias="schemaVersion")
-    sentences: list[ShotSentenceLine]
     assignments: list[SentenceAssignment]
+
+    @model_validator(mode="after")
+    def _unique_sentence_ids(self) -> ShotMatch:
+        ids = [a.sentence_id for a in self.assignments]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate sentenceId in ShotMatch.assignments")
+        return self

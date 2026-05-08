@@ -293,11 +293,6 @@
   },
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": {
-      "const": "0.1.0",
-      "title": "Schemaversion",
-      "type": "string"
-    },
     "runId": {
       "title": "Runid",
       "type": "string"
@@ -359,7 +354,6 @@
     }
   },
   "required": [
-    "schemaVersion",
     "runId",
     "sourceAnalysisRef",
     "createdAt",

@@ -78,7 +78,9 @@ class LitellmShotMatchOrchestrator:
         }
         system_prompt = (
             "You pick b-roll shots for a TikTok-style restaurant voiceover. "
-            "Return strict JSON only. Every sentence must reference exactly beatCount shots in order. "
+            "Return strict JSON only. Populate assignments: one entry per narration sentence "
+            "(sentenceId, text copied verbatim from the input, shots). "
+            "Each entry must have exactly beatCount shots in speech order. "
             "Do not repeat the same (clipId,momentId) on consecutive beats across the whole edit. "
             "Prefer higher confidenceScore; use weaker shots only if nothing else fits."
         )
@@ -101,9 +103,6 @@ class LitellmShotMatchOrchestrator:
             data = json.loads(raw)
         except json.JSONDecodeError as error:
             raise RuntimeError(f"LLM returned invalid JSON: {error}") from error
-
-        if "schemaVersion" not in data:
-            data["schemaVersion"] = "0.2.0"
 
         try:
             shot_match = ShotMatch.model_validate(data)

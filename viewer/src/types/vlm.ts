@@ -23,7 +23,6 @@ export interface VlmClip {
 }
 
 export interface VlmAnalysis {
-  schemaVersion?: string
   runId?: string
   analyzedAt?: string
   clips?: VlmClip[] | null

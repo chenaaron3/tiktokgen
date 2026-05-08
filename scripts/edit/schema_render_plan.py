@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RenderWord(BaseModel):
@@ -39,7 +39,6 @@ class RenderTheme(BaseModel):
 class RenderPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    schema_version: Literal["0.2.1"] = Field(alias="schemaVersion")
     run_id: str = Field(alias="runId")
     created_at: str = Field(alias="createdAt")
     duration_sec: float = Field(gt=0.0, alias="durationSec")

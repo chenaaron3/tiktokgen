@@ -208,7 +208,6 @@ def run(
     print(f"Wrote raw TwelveLabs output: {raw_output}")
 
     analysis = VlmAnalysis(
-        schemaVersion="0.4.1",
         runId=run_id,
         analyzedAt=datetime.now(timezone.utc).isoformat(),
         provider=Provider(name="twelvelabs", model=args.model, rawResponseRef=str(raw_output)),
