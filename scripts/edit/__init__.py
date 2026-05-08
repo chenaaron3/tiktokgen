@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .assemble import assemble_render_plan, resolve_source_window, validate_shots
+from .assemble import assemble_render_plan, build_resolved_sentences, resolve_source_window
 from .providers import ShotMatchOrchestrator
 from .schema_render_plan import RenderBeat, RenderPlan, RenderWord
 from .schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
@@ -19,8 +19,8 @@ __all__ = [
     "RenderPlan",
     "RenderBeat",
     "RenderWord",
+    "build_resolved_sentences",
     "assemble_render_plan",
-    "validate_shots",
     "build_vlm_shots_for_prompt",
     "resolve_source_window",
 ]

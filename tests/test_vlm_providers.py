@@ -23,7 +23,7 @@ def _minimal_fake_analysis(source: Path) -> dict:
         "summary": "fake summary",
         "identifiedShots": [
             {
-                "momentId": "shot-001",
+                "shotId": "shot-001",
                 "startSec": 0.0,
                 "endSec": 1.0,
                 "vlmTag": "not_suitable",

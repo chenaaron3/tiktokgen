@@ -11,13 +11,13 @@ PIPELINE_SAMPLE_WORDS: list[WordToken] = [
     WordToken(word="bite.", startSec=0.22, endSec=0.72),
 ]
 
-# Example shot-match pairing one sentence ↔ one `(clipId, momentId)`
+# Example shot-match pairing one sentence ↔ one `(clipId, shotId)`
 PIPELINE_SAMPLE_SHOT_MATCH = ShotMatch(
     assignments=[
         SentenceAssignment(
             sentenceId="s0",
             text="Great bite.",
-            shots=[ShotRef(clipId="fixture-clip-id", momentId="fixture-moment-id")],
+            shots=[ShotRef(clipId="fixture-clip-id", shotId="fixture-shot-id")],
         ),
     ],
 )

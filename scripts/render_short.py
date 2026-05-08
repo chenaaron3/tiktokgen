@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from edit import LitellmShotMatchOrchestrator, assemble_render_plan
+from edit import LitellmShotMatchOrchestrator
+from edit.assemble import assemble_render_plan, build_resolved_sentences
 from narrative import ElevenLabsTts, FasterWhisperWordTranscriber, LitellmScriptGenerator, build_sentence_ledger
 from pydantic import ValidationError
 from project_inputs import PROJECT_ROOT, resolve_project_path, resolve_run_directory
@@ -198,14 +199,19 @@ def main() -> int:
         return 0
 
     audio_end = max((w.end_sec for w in words), default=0.0)
-
-    render_plan = assemble_render_plan(
+    audio_duration_sec = max(audio_end, 0.01)
+    resolved_sentences = build_resolved_sentences(
         shot_match=shot_match,
         analysis=analysis,
         sentence_ledger=ledger,
+        audio_duration_sec=audio_duration_sec,
+    )
+
+    render_plan = assemble_render_plan(
+        resolved_sentences=resolved_sentences,
         whisper_words=words,
         voiceover_static_path=str(voice_path.resolve()),
-        audio_duration_sec=max(audio_end, 0.01),
+        audio_duration_sec=audio_duration_sec,
         run_id=analysis.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
     )

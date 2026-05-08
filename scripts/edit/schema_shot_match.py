@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -11,7 +9,7 @@ class ShotRef(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     clip_id: str = Field(alias="clipId")
-    moment_id: str = Field(alias="momentId")
+    shot_id: str = Field(alias="shotId")
 
 
 class SentenceAssignment(BaseModel):

@@ -151,7 +151,7 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
         )
         normalized.append(
             IdentifiedShot(
-                momentId=f"shot-{index:03d}",
+                shotId=f"shot-{index:03d}",
                 startSec=start_sec,
                 endSec=end_sec,
                 vlmTag=tag,

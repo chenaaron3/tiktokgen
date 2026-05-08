@@ -81,7 +81,7 @@ class LitellmShotMatchOrchestrator:
             "Return strict JSON only. Populate assignments: one entry per narration sentence "
             "(sentenceId, text copied verbatim from the input, shots). "
             "Each entry must have exactly beatCount shots in speech order. "
-            "Do not repeat the same (clipId,momentId) on consecutive beats across the whole edit. "
+            "Do not repeat the same (clipId,shotId) on consecutive beats across the whole edit. "
             "Prefer higher confidenceScore; use weaker shots only if nothing else fits."
         )
         payload = {

@@ -22,7 +22,7 @@ export type RenderBeat = {
   beatId: string;
   sentenceId: string;
   clipId: string;
-  momentId: string;
+  shotId: string;
   sourcePath: string;
   sourceStartSec: number;
   sourceEndSec: number;

@@ -2,20 +2,36 @@
 
 from __future__ import annotations
 
-import math
+from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
 
-from contracts import SentenceLedger, WordToken
+from contracts import SentenceEntry, SentenceLedger, WordToken
 from edit.schema_render_plan import RenderBeat, RenderPlan, RenderTheme, RenderWord
 from edit.schema_shot_match import ShotMatch, ShotRef
 from vlm.schema import Clip, IdentifiedShot, VlmAnalysis
 
+EPSILON = 1e-6
 
-def _moment_map(analysis: VlmAnalysis) -> dict[tuple[str, str], tuple[Clip, IdentifiedShot]]:
+
+@dataclass(frozen=True)
+class ResolvedShot:
+    clip_ref: str
+    shot_ref: str
+    clip: Clip
+    shot: IdentifiedShot
+
+
+@dataclass(frozen=True)
+class ResolvedSentence:
+    sentence: SentenceEntry
+    shots: list[ResolvedShot]
+
+
+def _shot_map(analysis: VlmAnalysis) -> dict[tuple[str, str], tuple[Clip, IdentifiedShot]]:
     m: dict[tuple[str, str], tuple[Clip, IdentifiedShot]] = {}
     for clip in analysis.clips:
         for shot in clip.identified_shots:
-            m[(clip.id, shot.moment_id)] = (clip, shot)
+            m[(clip.id, shot.shot_id)] = (clip, shot)
     return m
 
 
@@ -25,54 +41,92 @@ def resolve_source_window(
     clip: Clip,
     timeline_duration_sec: float,
 ) -> tuple[float, float]:
-    """Trim source around ``keyInstant`` long enough for this beat's timeline duration.
+    """Build a fixed-duration source window anchored at ``key_instant_sec``.
 
-    Window length is ``min(timeline_duration_sec, shot_span)`` (never longer than the
-    identified shot), then clamped to the clip file bounds. Playback rate stays ~1 when
-    the shot has enough contiguous span to cover the full beat."""
+    If the right edge overflows shot/clip bounds, shift the whole window left to preserve
+    duration while keeping playbackRate exactly 1.
+    """
     shot_start = shot.start_sec
     shot_end = shot.end_sec
     if shot_end < shot_start:
         raise ValueError("shot endSec < startSec")
-    span = shot_end - shot_start
-    if span <= 0:
-        raise ValueError("invalid shot span")
-
-    duration_limit = clip.duration_sec
-    dur_file = float(duration_limit) if duration_limit is not None else float("inf")
-
     td = float(timeline_duration_sec)
     if td <= 0:
         raise ValueError("timeline_duration_sec must be positive")
-    want_duration = min(td, span)
-    lo = shot_start
-    hi = shot_end - want_duration
-    if hi < lo:
-        hi = lo
-    centered = max(lo, min(key_instant_sec - want_duration / 2.0, hi))
-    s = centered
-    e = centered + want_duration
-    if e > dur_file:
-        shift = e - dur_file
-        s = max(shot_start, s - shift)
-        e = dur_file
-    if s < 0:
-        adj = -s
-        s = 0.0
-        e = min(dur_file, e + adj)
+    shot_lo = max(0.0, shot_start)
+    clip_hi = float(clip.duration_sec) if clip.duration_sec is not None else float("inf")
+    hi = min(shot_end, clip_hi)
+    if hi <= shot_lo:
+        raise ValueError(f"cannot form window for clip {clip.id} shot {shot.shot_id}")
+    max_duration = hi - shot_lo
+    if td > max_duration + EPSILON:
+        raise ValueError(
+            f"cannot allocate {td:.3f}s in clip {clip.id} shot {shot.shot_id} "
+            f"(available {max_duration:.3f}s)"
+        )
+
+    s = key_instant_sec
+    e = key_instant_sec + td
+
+    if e > hi:
+        shift = e - hi
+        s -= shift
+        e -= shift
+    if s < shot_lo:
+        shift = shot_lo - s
+        s += shift
+        e += shift
+
+    if s < shot_lo - EPSILON or e > hi + EPSILON:
+        raise ValueError(f"cannot fit source window for clip {clip.id} shot {shot.shot_id}")
     if e - s <= 0:
-        raise ValueError(f"cannot form window for clip {clip.id} moment {shot.moment_id}")
+        raise ValueError(f"cannot form positive window for clip {clip.id} shot {shot.shot_id}")
     return s, e
 
 
-def validate_shots(
+def _validate_sentence_ledger(
+    *,
+    sentence_ledger: SentenceLedger,
+    audio_duration_sec: float,
+) -> None:
+    if audio_duration_sec <= 0:
+        raise ValueError("audio_duration_sec must be positive")
+    ordered = sorted(sentence_ledger.sentences, key=lambda row: row.speech_start_sec)
+    if not ordered:
+        raise ValueError("sentence ledger must not be empty")
+    first_start = ordered[0].speech_start_sec
+    if abs(first_start - 0.0) > EPSILON:
+        raise ValueError(f"first sentence must start at 0, got {first_start:.6f}")
+    for idx in range(1, len(ordered)):
+        prev = ordered[idx - 1]
+        curr = ordered[idx]
+        if abs(curr.speech_start_sec - prev.speech_end_sec) > EPSILON:
+            raise ValueError(
+                "sentence ledger must be contiguous: "
+                f"{prev.sentence_id} ends at {prev.speech_end_sec:.6f}, "
+                f"but {curr.sentence_id} starts at {curr.speech_start_sec:.6f}"
+            )
+    last_end = ordered[-1].speech_end_sec
+    if abs(last_end - audio_duration_sec) > EPSILON:
+        raise ValueError(
+            f"last sentence must end at audio duration: {last_end:.6f} vs {audio_duration_sec:.6f}"
+        )
+
+
+def build_resolved_sentences(
     *,
     shot_match: ShotMatch,
+    analysis: VlmAnalysis,
     sentence_ledger: SentenceLedger,
-    moments: Mapping[tuple[str, str], tuple[Clip, IdentifiedShot]],
-    assignment_by_sentence: Mapping[str, Sequence[ShotRef]],
-) -> None:
-    """Raise ``ValueError`` if shot-match disagrees with the ledger or references unknown VLM shots."""
+    audio_duration_sec: float,
+) -> list[ResolvedSentence]:
+    """Return ordered, validated resolved sentence rows used by plan assembly."""
+    _validate_sentence_ledger(sentence_ledger=sentence_ledger, audio_duration_sec=audio_duration_sec)
+    shots_by_ref = _shot_map(analysis)
+    assignment_by_sentence: Mapping[str, Sequence[ShotRef]] = {
+        row.sentence_id: list(row.shots) for row in shot_match.assignments
+    }
+
     ledger_sentences = {(row.sentence_id, row.text.strip()) for row in sentence_ledger.sentences}
     shot_sentences = {(row.sentence_id, row.text.strip()) for row in shot_match.assignments}
     if ledger_sentences != shot_sentences:
@@ -83,6 +137,7 @@ def validate_shots(
         )
 
     ordered = sorted(sentence_ledger.sentences, key=lambda row: row.speech_start_sec)
+    resolved: list[ResolvedSentence] = []
     for sentence in ordered:
         sid = sentence.sentence_id
         shots_assignment = assignment_by_sentence.get(sid)
@@ -93,18 +148,29 @@ def validate_shots(
             raise ValueError(
                 f"sentence {sid!r}: expected {beat_expected} shots, got {len(shots_assignment)}"
             )
+        resolved_shots: list[ResolvedShot] = []
         for shot_ref in shots_assignment:
-            if moments.get((shot_ref.clip_id, shot_ref.moment_id)) is None:
+            resolved_row = shots_by_ref.get((shot_ref.clip_id, shot_ref.shot_id))
+            if resolved_row is None:
                 raise ValueError(
-                    f"unknown shot clip={shot_ref.clip_id!r} moment={shot_ref.moment_id!r}"
+                    f"unknown shot clip={shot_ref.clip_id!r} shot={shot_ref.shot_id!r}"
                 )
+            clip_obj, identified_shot = resolved_row
+            resolved_shots.append(
+                ResolvedShot(
+                    clip_ref=shot_ref.clip_id,
+                    shot_ref=shot_ref.shot_id,
+                    clip=clip_obj,
+                    shot=identified_shot,
+                )
+            )
+        resolved.append(ResolvedSentence(sentence=sentence, shots=resolved_shots))
+    return resolved
 
 
 def assemble_render_plan(
     *,
-    shot_match: ShotMatch,
-    analysis: VlmAnalysis,
-    sentence_ledger: SentenceLedger,
+    resolved_sentences: Sequence[ResolvedSentence],
     whisper_words: Sequence[WordToken],
     voiceover_static_path: str,
     audio_duration_sec: float,
@@ -113,85 +179,34 @@ def assemble_render_plan(
     hook_text: str | None = None,
 ) -> RenderPlan:
     """Build RenderPlan + validate beats / assignments / lengths."""
-    moments = _moment_map(analysis)
-    # Maps sentence ID to list of shots
-    assignment_by_sentence: Mapping[str, list[ShotRef]] = {
-        row.sentence_id: list(row.shots) for row in shot_match.assignments
-    }
-
-    validate_shots(
-        shot_match=shot_match,
-        sentence_ledger=sentence_ledger,
-        moments=moments,
-        assignment_by_sentence=assignment_by_sentence,
-    )
-
     warnings: list[str] = []
     beats_out: list[RenderBeat] = []
-    ordered = sorted(sentence_ledger.sentences, key=lambda row: row.speech_start_sec)
     prev_pair: tuple[str, str] | None = None
+    timeline_cursor = 0.0
 
-    speech_duration = lambda se: max(1e-9, se.speech_end_sec - se.speech_start_sec)
-
-    for si, sentence in enumerate(ordered):
+    for resolved_sentence in resolved_sentences:
+        sentence = resolved_sentence.sentence
         sid = sentence.sentence_id
-        shots_assignment = assignment_by_sentence[sid]
-
+        sentence_duration = sentence.speech_end_sec - sentence.speech_start_sec
+        if sentence_duration <= 0:
+            raise ValueError(f"non-positive sentence duration for {sid}")
         beat_expected = sentence.beat_count
+        allocated_shot_time = sentence_duration / float(beat_expected)
+        if allocated_shot_time <= 0:
+            raise ValueError(f"non-positive allocated shot duration for {sid}")
 
-        sd = speech_duration(sentence)
-        ceil_sd = math.ceil(sd - 1e-12)
-        if ceil_sd != sentence.beat_count:
-            warnings.append(
-                f"sentence {sid}: ledger beat_count {sentence.beat_count} != ceil(duration) {ceil_sd}"
-            )
-
-        s_speech = sentence.speech_start_sec
-        e_speech = sentence.speech_end_sec
-
-        next_speech_start: float | None = None
-        if si + 1 < len(ordered):
-            next_speech_start = ordered[si + 1].speech_start_sec
-
-        for j in range(beat_expected):
-            shot_ref = shots_assignment[j]
-            clip_obj, identified = moments[shot_ref.clip_id, shot_ref.moment_id]
-
-            last_beat_in_sentence = j == beat_expected - 1
-
-            if not last_beat_in_sentence:
-                timeline_start = s_speech + float(j)
-                timeline_end = timeline_start + 1.0
-            else:
-                timeline_start = s_speech + float(beat_expected - 1)
-                end_speech_floor = max(e_speech, timeline_start + 1e-6)
-                if next_speech_start is not None:
-                    timeline_end = max(end_speech_floor, float(next_speech_start))
-                else:
-                    timeline_end = max(end_speech_floor, audio_duration_sec)
-
-            timeline_duration = timeline_end - timeline_start
-            if timeline_duration <= 0:
-                raise ValueError(f"non-positive timeline for {sid} beat {j}")
-
+        for j, resolved_shot in enumerate(resolved_sentence.shots):
+            timeline_start = timeline_cursor
+            timeline_end = timeline_start + allocated_shot_time
+            timeline_cursor = timeline_end
             source_start, source_end = resolve_source_window(
-                identified.key_instant_sec,
-                identified,
-                clip_obj,
-                timeline_duration,
+                resolved_shot.shot.key_instant_sec,
+                resolved_shot.shot,
+                resolved_shot.clip,
+                allocated_shot_time,
             )
-            source_duration = source_end - source_start
-            shot_span = identified.end_sec - identified.start_sec
-            if source_duration + 1e-5 < timeline_duration:
-                warnings.append(
-                    f"beat {sid}-{j}: usable source {source_duration:.3f}s < timeline "
-                    f"{timeline_duration:.3f}s (shot span {shot_span:.3f}s; "
-                    f"playbackRate {source_duration / timeline_duration:.3f})"
-                )
 
-            playback_rate = source_duration / timeline_duration
-
-            pair = (shot_ref.clip_id, shot_ref.moment_id)
+            pair = (resolved_shot.clip_ref, resolved_shot.shot_ref)
             if prev_pair is not None and pair == prev_pair:
                 warnings.append(
                     f"consecutive beats reuse same footage {pair} "
@@ -203,30 +218,35 @@ def assemble_render_plan(
                 RenderBeat(
                     beatId=f"{sid}-{j}",
                     sentenceId=sid,
-                    clipId=shot_ref.clip_id,
-                    momentId=identified.moment_id,
-                    sourcePath=clip_obj.source_path,
+                    clipId=resolved_shot.clip_ref,
+                    shotId=resolved_shot.shot_ref,
+                    sourcePath=resolved_shot.clip.source_path,
                     sourceStartSec=source_start,
                     sourceEndSec=source_end,
                     timelineStartSec=timeline_start,
                     timelineEndSec=timeline_end,
-                    playbackRate=playback_rate,
+                    playbackRate=1.0,
                 )
             )
 
     words_render = [
         RenderWord(word=w.word, startSec=w.start_sec, endSec=w.end_sec) for w in whisper_words
     ]
-    hook = hook_text.strip() if hook_text else (ordered[0].text.strip() if ordered else "Short")
-
-    duration_sec = max(
-        audio_duration_sec, max((b.timeline_end_sec for b in beats_out), default=0.0)
+    hook = (
+        hook_text.strip()
+        if hook_text
+        else (resolved_sentences[0].sentence.text.strip() if resolved_sentences else "Short")
     )
+    if beats_out and abs(beats_out[-1].timeline_end_sec - audio_duration_sec) > EPSILON:
+        raise ValueError(
+            "assembled beats must end at audio duration: "
+            f"{beats_out[-1].timeline_end_sec:.6f} vs {audio_duration_sec:.6f}"
+        )
 
     return RenderPlan(
         runId=run_id,
         createdAt=created_at,
-        durationSec=duration_sec,
+        durationSec=audio_duration_sec,
         voiceoverStaticPath=voiceover_static_path,
         theme=RenderTheme(hookText=hook),
         beats=sorted(beats_out, key=lambda b: (b.timeline_start_sec, b.beat_id)),

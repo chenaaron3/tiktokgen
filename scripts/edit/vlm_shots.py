@@ -15,7 +15,7 @@ def build_vlm_shots_for_prompt(analysis: VlmAnalysis) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "clipId": clip.id,
-                    "momentId": shot.moment_id,
+                    "shotId": shot.shot_id,
                     "vlmTag": shot.vlm_tag,
                     "confidenceScore": shot.confidence_score,
                     "reasoning": shot.reasoning,

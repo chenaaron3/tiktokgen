@@ -1,7 +1,7 @@
 /** VLM analysis JSON from cache (camelCase keys). */
 
 export interface IdentifiedShot {
-  momentId?: string
+  shotId?: string
   startSec?: number
   endSec?: number
   vlmTag?: string

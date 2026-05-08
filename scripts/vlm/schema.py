@@ -27,7 +27,7 @@ class TwelveLabsClipRef(BaseModel):
 class IdentifiedShot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    moment_id: str = Field(alias="momentId")
+    shot_id: str = Field(alias="shotId")
     start_sec: float = Field(alias="startSec")
     end_sec: float = Field(alias="endSec")
     vlm_tag: str = Field(alias="vlmTag")

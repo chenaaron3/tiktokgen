@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RenderWord(BaseModel):
@@ -21,7 +19,7 @@ class RenderBeat(BaseModel):
     beat_id: str = Field(alias="beatId")
     sentence_id: str = Field(alias="sentenceId")
     clip_id: str = Field(alias="clipId")
-    moment_id: str = Field(alias="momentId")
+    shot_id: str = Field(alias="shotId")
     source_path: str = Field(alias="sourcePath")
     source_start_sec: float = Field(ge=0.0, alias="sourceStartSec")
     source_end_sec: float = Field(ge=0.0, alias="sourceEndSec")

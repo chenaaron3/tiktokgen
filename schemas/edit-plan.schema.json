@@ -122,7 +122,7 @@
           "title": "Clipid",
           "type": "string"
         },
-        "momentId": {
+        "shotId": {
           "anyOf": [
             {
               "type": "string"
@@ -132,7 +132,7 @@
             }
           ],
           "default": null,
-          "title": "Momentid"
+          "title": "Shotid"
         },
         "sourcePath": {
           "title": "Sourcepath",

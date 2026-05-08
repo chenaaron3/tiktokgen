@@ -8,7 +8,7 @@ from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAna
 
 def _mini_analysis() -> VlmAnalysis:
     shot = IdentifiedShot(
-        momentId="m1",
+        shotId="m1",
         startSec=0.0,
         endSec=4.0,
         vlmTag="utensil_lift",
@@ -55,7 +55,7 @@ def test_static_shot_match_orchestrator():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hi.",
-                shots=[ShotRef(clipId="c0", momentId="m1")],
+                shots=[ShotRef(clipId="c0", shotId="m1")],
             ),
         ],
     )
