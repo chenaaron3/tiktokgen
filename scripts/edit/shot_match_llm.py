@@ -1,9 +1,8 @@
-"""One-call LiteLLM orchestration → validated ShotMatch."""
+"""One-call LiteLLM orchestration → validated ``ShotMatch`` (idempotent on ``shot-match.json``)."""
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -11,13 +10,16 @@ import litellm
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from edit.providers import ShotMatchOrchestrator
+from contracts import SentenceLedger
 from edit.schema_shot_match import ShotMatch
 from edit.strict_json import make_openai_strict_schema
+from edit.vlm_shots import build_vlm_shots_for_prompt
 from logger import install_local_observability_logger
+from util import PathUtil
+from vlm.schema import VlmAnalysis
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL = "openai/gpt-4.1-mini"
+SHOT_MATCH_MODEL = "openai/gpt-4.1-mini"
 
 
 def _chat_completion_json(
@@ -38,28 +40,33 @@ def _chat_completion_json(
 
 
 class LitellmShotMatchOrchestrator:
-    """Production implementation using OpenAI-style JSON schema mode via LiteLLM."""
+    """Caches ``shot-match.json`` under ``paths``; observability handled when calling LiteLLM."""
 
-    def __init__(
-        self,
-        *,
-        model: str | None = None,
-        observability_path: Path | None = None,
-        load_env_path: Path | None = None,
-    ) -> None:
+    def __init__(self, paths: PathUtil, load_env_path: Path | None = None) -> None:
         load_dotenv(load_env_path or PROJECT_ROOT / ".env")
-        self._model = model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
-        self._observability_path = observability_path
-        if observability_path is not None:
-            install_local_observability_logger()
+        self._paths = paths
 
     def generate_shot_match(
         self,
         *,
-        sentences: list[dict[str, Any]],
-        vlm_shots: list[dict[str, Any]],
+        analysis: VlmAnalysis,
+        ledger: SentenceLedger,
         guidance: str | None,
     ) -> ShotMatch:
+        shot_path = self._paths.shot_match_json()
+        if shot_path.is_file():
+            print(f"\n==> shot-match (cached: {shot_path})")
+            data = json.loads(shot_path.read_text())
+            return ShotMatch.model_validate(data)
+
+        print("\n==> Shot-match LLM")
+        self._paths.llm_observability_dir().mkdir(parents=True, exist_ok=True)
+        obs_file = self._paths.shot_match_llm_observability_json().resolve()
+        install_local_observability_logger()
+
+        sentences_payload = [s.model_dump(by_alias=True) for s in ledger.sentences]
+        vlm_shots = build_vlm_shots_for_prompt(analysis)
+
         schema = make_openai_strict_schema(ShotMatch.model_json_schema(by_alias=True))
         response_format = {
             "type": "json_schema",
@@ -77,14 +84,12 @@ class LitellmShotMatchOrchestrator:
         )
         payload = {
             "guidance": guidance,
-            "sentences": sentences,
+            "sentences": sentences_payload,
             "vlmShots": vlm_shots,
         }
-        metadata = None
-        if self._observability_path is not None:
-            metadata = {"stage": "shot_match", "observabilityPath": str(self._observability_path)}
+        metadata = {"stage": "shot_match", "observabilityPath": str(obs_file)}
         raw = _chat_completion_json(
-            model=self._model,
+            model=SHOT_MATCH_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
@@ -101,9 +106,14 @@ class LitellmShotMatchOrchestrator:
             data["schemaVersion"] = "0.2.0"
 
         try:
-            return ShotMatch.model_validate(data)
+            shot_match = ShotMatch.model_validate(data)
         except ValidationError as error:
             raise RuntimeError(f"LLM JSON failed validation: {error}") from error
+
+        shot_path.write_text(
+            json.dumps(shot_match.model_dump(by_alias=True), indent=2, ensure_ascii=False) + "\n"
+        )
+        return shot_match
 
 
 class StaticShotMatchOrchestrator:
@@ -115,8 +125,8 @@ class StaticShotMatchOrchestrator:
     def generate_shot_match(
         self,
         *,
-        sentences: list[dict[str, Any]],
-        vlm_shots: list[dict[str, Any]],
+        analysis: VlmAnalysis,
+        ledger: SentenceLedger,
         guidance: str | None,
     ) -> ShotMatch:
         return self._fixed.model_copy(deep=True)

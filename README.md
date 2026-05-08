@@ -21,7 +21,8 @@ Shared Python code is grouped under `scripts/`:
 - `scripts/edit/`: `shot-match.json` (LLM / review) and deterministic `render-plan.json`.
 - `scripts/narrative/`: script LLM, ElevenLabs TTS, faster-whisper word timings, sentence ledger.
 - `scripts/contracts.py`: shared sentence/token DTOs.
-- `scripts/project_inputs.py`: bundled folder resolution (clips + `notes.txt` / lone `.txt`).
+- `scripts/project_inputs.py`: repo-root path helpers; `--run-dir`/`--resume` cache layout.
+- `scripts/util/path_util.py`: run artifact paths (`PathUtil`), bundled project folder resolution (`resolve_bundled_project`, `notes.txt`).
 - `scripts/fixtures/pipeline.py`: sample words + sample `ShotMatch` for tests.
 - `scripts/logger/`: local LiteLLM observability logger.
 
@@ -41,37 +42,27 @@ npm install
 
 Run the **narrative pipeline** (script → TTS → Whisper → VLM → shot-match LLM → deterministic `render-plan.json` → Remotion).
 
+**SOURCE** is always a **project folder**: your video clips and **`notes.txt`** (exact filename) in the **same directory** (for example `assets/05-03`).
+
 **Explicit run folder:**
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py path/to/footage \
+PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
   --run-dir cache/my-run \
-  --notes-file notes.txt \
-  --auto-approve-script \
   --guidance "stylish West Village pacing"
 ```
 
-**Project folder** (videos + notes in the **same directory** — e.g. `assets/05-03`): omit `--notes-file`. Prefer `notes.txt`, otherwise exactly **one** non-readme story `*.txt`.
+**Default cache run** (new UUID under `--cache-dir` when you omit `--run-dir` / `--resume`):
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
-  --auto-approve-script
-```
-
-**New UUID run** (`--cache-dir/<uuid>/` when you omit `--run-dir` / `--resume`): by default SOURCE is analyzed as footage only—still pass **`--notes-file`** unless SOURCE is the bundled **project folder** pattern above:
-
-```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py path/to/clips-folder \
-  --notes-file ./notes.txt \
-  --auto-approve-script
+PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03
 ```
 
 **Resume latest run:** reuse the subdirectory of `--cache-dir` that was modified most recently (do not combine with `--run-dir`):
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py path/to/footage \
-  --resume \
-  --auto-approve-script
+PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
+  --resume
 ```
 
 Artifacts land under your chosen `--run-dir` or under `cache/<uuid>/` / the resumed folder (`script.txt`, `voiceover.mp3`, etc.; see below).

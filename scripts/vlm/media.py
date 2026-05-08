@@ -14,8 +14,8 @@ from typing import Any
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".avi", ".mkv", ".webm"}
 
 
-def discover_videos(source: Path, *, recursive: bool) -> list[Path]:
-    """Return supported videos for a file or directory source."""
+def discover_videos(source: Path) -> list[Path]:
+    """Return supported videos for a file or directory source (immediate children only for directories)."""
     if source.is_file():
         if source.suffix.lower() not in VIDEO_EXTENSIONS:
             raise ValueError(f"Unsupported video extension: {source.suffix}")
@@ -24,10 +24,9 @@ def discover_videos(source: Path, *, recursive: bool) -> list[Path]:
     if not source.is_dir():
         raise FileNotFoundError(f"Source does not exist: {source}")
 
-    pattern = "**/*" if recursive else "*"
     videos = sorted(
         path
-        for path in source.glob(pattern)
+        for path in source.glob("*")
         if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
     )
     if not videos:

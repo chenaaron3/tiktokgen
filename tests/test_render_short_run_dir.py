@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from render_short import find_latest_run_directory, resolve_run_directory
+from project_inputs import find_latest_run_directory, resolve_run_directory
 
 
 def test_find_latest_run_directory_picks_recent(tmp_path: Path) -> None:

@@ -2,52 +2,39 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+from util import PathUtil
+
+from .schema import VlmAnalysis
 
 
 @runtime_checkable
 class VideoAnalysisBackend(Protocol):
-    def analyze(
-        self,
-        *,
-        source: Path,
-        cache_dir: Path,
-        output_dir: Path | None,
-        recursive: bool,
-        model: str,
-        min_segment_duration: float,
-        max_segment_duration: float,
-        max_concurrency: int,
-    ) -> Path:
-        """Return run directory containing `vlm-analysis.json`."""
+    def analyze(self, source: Path) -> VlmAnalysis:
+        """Load cached ``vlm-analysis.json`` under the run paths, or analyze ``source`` and return it."""
         ...
 
 
 class TwelveLabsVideoAnalysisBackend:
-    """Default TwelveLabs pipeline."""
+    """Default TwelveLabs pipeline (segment durations, model, concurrency: ``vlm.analysis.run`` defaults)."""
 
-    def analyze(
-        self,
-        *,
-        source: Path,
-        cache_dir: Path,
-        output_dir: Path | None,
-        recursive: bool,
-        model: str,
-        min_segment_duration: float,
-        max_segment_duration: float,
-        max_concurrency: int,
-    ) -> Path:
+    def __init__(self, paths: PathUtil) -> None:
+        self._paths = paths
+
+    def analyze(self, source: Path) -> VlmAnalysis:
+        out = self._paths.vlm_analysis_json()
+        if out.is_file():
+            return VlmAnalysis.model_validate(json.loads(out.read_text()))
+
+        print("\n==> VLM analyze")
         from vlm.analysis import run as run_analysis
 
-        return run_analysis(
+        run_analysis(
             source=source,
-            cache_dir=cache_dir,
-            output_dir=output_dir,
-            recursive=recursive,
-            model=model,
-            min_segment_duration=min_segment_duration,
-            max_segment_duration=max_segment_duration,
-            max_concurrency=max_concurrency,
+            cache_dir=self._paths.vlm_cache_dir(),
+            output_dir=self._paths.vlm_output_dir(),
         )
+        return VlmAnalysis.model_validate(json.loads(out.read_text()))

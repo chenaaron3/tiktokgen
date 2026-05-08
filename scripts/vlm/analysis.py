@@ -15,11 +15,18 @@ from uuid6 import uuid7
 
 from .media import discover_videos, extend_video_below_minimum_twelvelabs_duration, probe_media
 from .schema import Clip, Provider, VlmAnalysis
-from .twelvelabs import TwelveLabsVideoAnalyzer
-
+from .twelvelabs import (
+    DEFAULT_ANALYSIS_MODEL_NAME,
+    MAX_SEGMENT_DURATION_SEC,
+    MIN_SEGMENT_DURATION_SEC,
+    TwelveLabsVideoAnalyzer,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MIN_TWELVELABS_VIDEO_DURATION_SEC = 4.0
+
+# Concurrent video workers in ``run()`` (TwelveLabs API batch); fixed default for programmatic use.
+MAX_PARALLEL_VIDEO_ANALYSES = 10
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,27 +57,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exact output directory for this run. Overrides --cache-dir and run UUID directory creation.",
     )
     parser.add_argument(
-        "--recursive",
-        action="store_true",
-        help="When source is a directory, include videos from nested subdirectories.",
-    )
-    parser.add_argument("--model", default="pegasus1.5", help="TwelveLabs Pegasus model name.")
-    parser.add_argument(
         "--min-segment-duration",
         type=float,
-        default=2.0,
+        default=MIN_SEGMENT_DURATION_SEC,
         help="Minimum segment duration requested from TwelveLabs (must fit video length constraints).",
     )
     parser.add_argument(
         "--max-segment-duration",
         type=float,
-        default=4.0,
+        default=MAX_SEGMENT_DURATION_SEC,
         help="Maximum segment duration requested from TwelveLabs.",
     )
     parser.add_argument(
         "--max-concurrency",
         type=int,
-        default=10,
+        default=MAX_PARALLEL_VIDEO_ANALYSES,
         help="Maximum number of videos to process concurrently. Hard-capped at 10.",
     )
     return parser
@@ -83,7 +84,6 @@ def write_json(path: Path, data: Any) -> None:
 
 def create_analyzer(args: argparse.Namespace) -> TwelveLabsVideoAnalyzer:
     return TwelveLabsVideoAnalyzer(
-        model=args.model,
         min_segment_duration=args.min_segment_duration,
         max_segment_duration=args.max_segment_duration,
     )
@@ -125,17 +125,15 @@ def run(
     source: Path,
     cache_dir: Path = Path("cache"),
     output_dir: Path | None = None,
-    recursive: bool = False,
-    model: str = "pegasus1.5",
-    min_segment_duration: float = 2.0,
-    max_segment_duration: float = 4.0,
-    max_concurrency: int = 10,
+    min_segment_duration: float = MIN_SEGMENT_DURATION_SEC,
+    max_segment_duration: float = MAX_SEGMENT_DURATION_SEC,
+    max_concurrency: int = MAX_PARALLEL_VIDEO_ANALYSES,
 ) -> Path:
     """Analyze videos and return the run output directory."""
     load_dotenv(PROJECT_ROOT / ".env")
 
     args = argparse.Namespace(
-        model=model,
+        model=DEFAULT_ANALYSIS_MODEL_NAME,
         min_segment_duration=min_segment_duration,
         max_segment_duration=max_segment_duration,
         max_concurrency=max_concurrency,
@@ -147,7 +145,7 @@ def run(
         videos = [source_path]
     elif source_path.is_dir():
         try:
-            videos = discover_videos(source_path, recursive=recursive)
+            videos = discover_videos(source_path)
         except (FileNotFoundError, ValueError) as error:
             raise SystemExit(str(error)) from error
     else:
@@ -227,8 +225,6 @@ def main() -> int:
         source=args.source,
         cache_dir=args.cache_dir,
         output_dir=args.output_dir,
-        recursive=args.recursive,
-        model=args.model,
         min_segment_duration=args.min_segment_duration,
         max_segment_duration=args.max_segment_duration,
         max_concurrency=args.max_concurrency,

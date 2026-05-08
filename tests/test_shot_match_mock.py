@@ -1,7 +1,6 @@
-"""Shot-match façade with deterministic orchestrator (no LiteLLM)."""
+"""Shot-match orchestrator stub (no LiteLLM)."""
 
 from contracts import SentenceEntry, SentenceLedger
-from edit.planner_facade import run_shot_match
 from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef, ShotSentenceLine
 from edit.shot_match_llm import StaticShotMatchOrchestrator
 from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
@@ -38,7 +37,7 @@ def _mini_analysis() -> VlmAnalysis:
     )
 
 
-def test_run_shot_match_uses_mock_orchestrator():
+def test_static_shot_match_orchestrator():
     analysis = _mini_analysis()
     ledger = SentenceLedger(
         sentences=[
@@ -64,12 +63,5 @@ def test_run_shot_match_uses_mock_orchestrator():
     )
 
     orch = StaticShotMatchOrchestrator(fake)
-    out = run_shot_match(
-        analysis=analysis,
-        ledger=ledger,
-        orchestrator=orch,
-        guidance=None,
-        model=None,
-        observability_path=None,
-    )
+    out = orch.generate_shot_match(analysis=analysis, ledger=ledger, guidance=None)
     assert out.model_dump() == fake.model_dump()

@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 from narrative.providers import TextToSpeech
+from util import PathUtil
 
 # Same default voice as shortgen `voice_generator/elevenlabs.py`
 DEFAULT_VOICE_ID = "NFG5qt843uXKj4pFvR7C"
@@ -22,6 +23,7 @@ class ElevenLabsTts(TextToSpeech):
 
     def __init__(
         self,
+        paths: PathUtil,
         *,
         api_key: str | None = None,
         voice_id: str | None = None,
@@ -30,6 +32,7 @@ class ElevenLabsTts(TextToSpeech):
         dotenv_path: Path | None = None,
     ) -> None:
         load_dotenv(dotenv_path or Path(__file__).resolve().parents[2] / ".env")
+        self._paths = paths
         self._key = api_key or os.environ.get("ELEVENLABS_API_KEY")
         if not self._key:
             raise RuntimeError("ELEVENLABS_API_KEY is required")
@@ -37,7 +40,12 @@ class ElevenLabsTts(TextToSpeech):
         self._model_id = model_id
         self._output_format = output_format
 
-    def synthesize(self, script_text: str, output_mp3: Path) -> None:
+    def synthesize(self, script_text: str) -> Path:
+        output_mp3 = self._paths.voiceover_mp3()
+        if output_mp3.is_file():
+            return output_mp3
+
+        print("\n==> ElevenLabs TTS")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self._voice}/with-timestamps"
         headers = {"xi-api-key": self._key, "Content-Type": "application/json"}
         payload = {
@@ -55,3 +63,4 @@ class ElevenLabsTts(TextToSpeech):
             raise RuntimeError("ElevenLabs response missing audio_base64")
         output_mp3.parent.mkdir(parents=True, exist_ok=True)
         output_mp3.write_bytes(base64.b64decode(audio_b64))
+        return output_mp3

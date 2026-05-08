@@ -11,17 +11,18 @@ from contracts import WordToken
 @runtime_checkable
 class ScriptGenerator(Protocol):
     def generate(self, notes: str) -> str:
-        """Return approved-style script text (spoken)."""
+        """Return spoken script body (may load from cached ``script.txt``, call an LLM, or echo a stub)."""
         ...
 
 
 @runtime_checkable
 class TextToSpeech(Protocol):
-    def synthesize(self, script_text: str, output_mp3: Path) -> None:
+    def synthesize(self, script_text: str) -> Path:
         ...
 
 
 @runtime_checkable
 class WordTranscriber(Protocol):
-    def transcribe_words(self, audio_mp3: Path) -> list[WordToken]:
+    def transcribe_words(self) -> list[WordToken]:
+        """Decode word timings under one run layout (typically idempotent cached JSON)."""
         ...

@@ -12,68 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from uuid6 import uuid7
-
-from contracts import SentenceLedger, WordToken
 from dotenv import load_dotenv
-from edit import assemble_render_plan, run_shot_match
-from edit.schema_shot_match import ShotMatch
+from edit import LitellmShotMatchOrchestrator, assemble_render_plan
 from narrative import ElevenLabsTts, FasterWhisperWordTranscriber, LitellmScriptGenerator, build_sentence_ledger
 from pydantic import ValidationError
-from vlm import TwelveLabsVideoAnalysisBackend, VideoAnalysisBackend
-from vlm.schema import VlmAnalysis
+from project_inputs import PROJECT_ROOT, resolve_project_path, resolve_run_directory
+from util import PathUtil, resolve_bundled_project
+from vlm import TwelveLabsVideoAnalysisBackend
 
-from project_inputs import resolve_bundled_project
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_DIR = PROJECT_ROOT / "remotion" / "public"
 STATIC_PREFIX = "static:"
-
-
-def resolve_project_path(path: Path) -> Path:
-    expanded = path.expanduser()
-    return expanded.resolve() if expanded.is_absolute() else (PROJECT_ROOT / expanded).resolve()
-
-
-def find_latest_run_directory(cache_dir: Path) -> Path | None:
-    """Return the subdirectory of `cache_dir` with the newest ``st_mtime``, or ``None`` if empty."""
-    if not cache_dir.is_dir():
-        return None
-    candidates = [
-        p for p in cache_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stat().st_mtime)
-
-
-def resolve_run_directory(
-    *,
-    run_dir_arg: Path | None,
-    resume: bool,
-    cache_dir_arg: Path,
-) -> Path:
-    """Pick explicit ``--run-dir``, latest under cache (``--resume``), or ``cache-dir/<new-uuid>``."""
-    if run_dir_arg is not None and resume:
-        raise SystemExit("Use only one of --run-dir or --resume (not both).")
-    cache_base = resolve_project_path(cache_dir_arg)
-    cache_base.mkdir(parents=True, exist_ok=True)
-    if run_dir_arg is not None:
-        return resolve_project_path(run_dir_arg)
-    if resume:
-        latest = find_latest_run_directory(cache_base)
-        if latest is None:
-            raise SystemExit(
-                f"No run directories found under {cache_base}; "
-                "run without --resume to create a new UUID run folder."
-            )
-        print(f"Resuming latest run: {latest}")
-        return latest
-    new_id = str(uuid7())
-    run = cache_base / new_id
-    print(f"New run directory: {run}")
-    return run
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,17 +34,8 @@ def parse_args() -> argparse.Namespace:
         "source",
         type=Path,
         help=(
-            "Footage: path to one video **or** a folder of clips for VLM. "
-            "**Bundled session:** path to a directory that contains your videos "
-            "**and** notes (notes.txt preferred, or exactly one non-readme *.txt)—omit --notes-file in that case."
-        ),
-    )
-    parser.add_argument(
-        "--notes-file",
-        type=Path,
-        help=(
-            "Explicit rough notes path. Required when SOURCE is a **single video file**. "
-            "Optional when SOURCE is a **directory** containing notes.txt / one story *.txt beside the clips."
+            "Bundled **project folder**: videos for VLM plus **notes.txt** (exact filename) "
+            "in that same directory."
         ),
     )
     parser.add_argument(
@@ -123,51 +62,27 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--recursive",
-        action="store_true",
-        help="When source is a folder, recurse into nested videos.",
-    )
-    parser.add_argument(
         "--guidance",
         default="Cohesive TikTok restaurant b-roll pacing.",
         help="Creative hint passed to shot-match LLM.",
     )
     parser.add_argument(
-        "--auto-approve-script",
-        action="store_true",
-        help="Copy script.draft.txt → script.txt without manual gate.",
-    )
-    parser.add_argument(
-        "--stop-after-script",
-        action="store_true",
-        help="Exit after writing script draft (requires usable notes when script.txt missing).",
-    )
-    parser.add_argument(
-        "--stop-after-shot-match",
-        action="store_true",
-        help="Exit after shot-match.json (assembly/render skipped).",
-    )
-    parser.add_argument(
-        "--assemble-only",
-        action="store_true",
-        help="Reuse existing artifacts; run assembly (+ optional render) only.",
-    )
-    parser.add_argument("--vlm-model", default="pegasus1.5", help="TwelveLabs Pegasus model.")
-    parser.add_argument("--shot-match-model", help="LiteLLM model override for shot matching.")
-    parser.add_argument(
-        "--skip-render",
-        action="store_true",
-        help="Stop after writing render-plan.json (still runs asset prep if needed).",
+        "--break",
+        dest="break_after",
+        metavar="STEP",
+        choices=("script", "vlm", "tts", "match", "assemble"),
+        default=None,
+        help=(
+            "Exit successfully right after this pipeline step. "
+            "Steps: script (after script.txt), vlm (after VLM analysis), "
+            "tts (after voice synthesize only; Whisper and later skipped on this run), "
+            "match (after shot-match.json), assemble (after render-plan.json; Remotion render skipped)."
+        ),
     )
     parser.add_argument(
         "--render-output",
         type=Path,
         help="Destination MP4 path. Defaults to <run-dir>/render.mp4.",
-    )
-    parser.add_argument(
-        "--faster-whisper-model",
-        default="base.en",
-        help="Model id for faster-whisper transcription.",
     )
     return parser.parse_args()
 
@@ -229,34 +144,6 @@ def copy_plan_media_to_public(plan: dict[str, Any]) -> Path:
     return asset_dir
 
 
-def stage_script(*, run_dir: Path, notes_file: Path | None, auto_approve: bool, stop_after: bool) -> None:
-    draft = run_dir / "script.draft.txt"
-    approved = run_dir / "script.txt"
-    if approved.is_file():
-        return
-    if notes_file is None or not notes_file.is_file():
-        raise SystemExit(f"Need {approved} or valid --notes-file to create a script draft.")
-    notes = notes_file.read_text()
-    obs_file = run_dir / "llm-observability" / "script.json"
-    obs_file.parent.mkdir(parents=True, exist_ok=True)
-    generator = LitellmScriptGenerator(observability_path=obs_file)
-    text = generator.generate(notes)
-    draft.write_text(text.strip() + "\n")
-    print(f"Wrote script draft: {draft}")
-    if auto_approve:
-        shutil.copy(draft, approved)
-        print(f"Auto-approved → {approved}")
-    else:
-        print("Copy or rename script.draft.txt → script.txt before continuing.")
-    if stop_after or not approved.is_file():
-        raise SystemExit(0)
-
-
-def load_json_model(path: Path, model: type[ShotMatch] | type[VlmAnalysis]) -> Any:
-    raw = json.loads(path.read_text())
-    return model.model_validate(raw)
-
-
 def main() -> int:
     load_dotenv(PROJECT_ROOT / ".env")
     args = parse_args()
@@ -266,107 +153,48 @@ def main() -> int:
         cache_dir_arg=args.cache_dir,
     )
     run_dir.mkdir(parents=True, exist_ok=True)
+    paths = PathUtil(run_dir)
 
-    raw_target = resolve_project_path(args.source)
-
-    if args.notes_file is not None:
-        footage_root = raw_target
-        notes_path_resolved = resolve_project_path(args.notes_file)
-    else:
-        if raw_target.is_file():
-            raise SystemExit(
-                "When SOURCE is a single video file you must pass --notes-file PATH. "
-                "Or point SOURCE at a **folder** that contains both your clips and notes.txt "
-                "(or exactly one notes .txt)—for example assets/05-03."
-            )
-        footage_root, notes_path_resolved = resolve_bundled_project(
-            raw_target, recursive=args.recursive
-        )
+    footage_root, notes_path_resolved = resolve_bundled_project(args.source)
 
     print(f"\nFootage source: {footage_root}")
     print(f"Notes file: {notes_path_resolved}")
 
-    if not args.assemble_only:
-        try:
-            stage_script(
-                run_dir=run_dir,
-                notes_file=notes_path_resolved,
-                auto_approve=args.auto_approve_script,
-                stop_after=args.stop_after_script,
-            )
-        except SystemExit as exited:
-            if isinstance(exited.code, int):
-                return exited.code
-            if exited.code is None:
-                return 0
-            return 1
+    # Create script from notes
+    script_text = LitellmScriptGenerator(paths=paths).generate(notes_path_resolved.read_text())
 
-    script_path = run_dir / "script.txt"
-    if not script_path.is_file():
-        raise SystemExit(f"Missing approved script: {script_path}")
+    if args.break_after == "script":
+        print("Stopping after script (--break script).")
+        return 0
 
-    vlm_path = run_dir / "vlm-analysis.json"
-    analysis: VlmAnalysis | None = None
-    if not vlm_path.is_file():
-        backend: VideoAnalysisBackend = TwelveLabsVideoAnalysisBackend()
-        print("\n==> VLM analyze")
-        out_dir = backend.analyze(
-            source=footage_root,
-            cache_dir=run_dir.parent,
-            output_dir=run_dir,
-            recursive=args.recursive,
-            model=args.vlm_model,
-            min_segment_duration=2.0,
-            max_segment_duration=4.0,
-            max_concurrency=10,
-        )
-        analysis = load_json_model(out_dir / "vlm-analysis.json", VlmAnalysis)
-    else:
-        analysis = load_json_model(vlm_path, VlmAnalysis)
+    # Analyze footage
+    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(footage_root)
 
-    voice_path = run_dir / "voiceover.mp3"
-    if not voice_path.is_file():
-        print("\n==> ElevenLabs TTS")
-        ElevenLabsTts().synthesize(script_path.read_text(), voice_path)
+    if args.break_after == "vlm":
+        print("Stopping after VLM (--break vlm).")
+        return 0
 
-    whisper_path = run_dir / "whisper-words.json"
-    words: list[WordToken]
-    if whisper_path.is_file():
-        raw = json.loads(whisper_path.read_text())
-        words = [WordToken.model_validate(w) for w in raw.get("words", [])]
-    else:
-        print("\n==> faster-whisper")
-        transcriber = FasterWhisperWordTranscriber(model_size=args.faster_whisper_model)
-        words = transcriber.transcribe_words(voice_path)
-        whisper_path.write_text(
-            json.dumps({"words": [w.model_dump(by_alias=True) for w in words]}, indent=2) + "\n"
-        )
+    # Generate voiceover
+    voice_path = ElevenLabsTts(paths=paths).synthesize(script_text)
 
-    ledger = build_sentence_ledger(words)
-    ledger_path = run_dir / "sentence-ledger.json"
-    ledger_path.write_text(json.dumps(ledger.model_dump(by_alias=True), indent=2) + "\n")
+    if args.break_after == "tts":
+        print("Stopping after TTS (--break tts).")
+        return 0
 
-    shot_path = run_dir / "shot-match.json"
-    observability = run_dir / "llm-observability" / "shot-match.json"
-    if shot_path.is_file():
-        shot_match = load_json_model(shot_path, ShotMatch)
-        print(f"\n==> shot-match (cached: {shot_path})")
-    else:
-        print("\n==> Shot-match LLM")
-        observability.parent.mkdir(parents=True, exist_ok=True)
-        shot_match = run_shot_match(
-            analysis=analysis,
-            ledger=ledger,
-            guidance=args.guidance,
-            model=args.shot_match_model,
-            observability_path=observability,
-        )
-        shot_path.write_text(
-            json.dumps(shot_match.model_dump(by_alias=True), indent=2, ensure_ascii=False) + "\n"
-        )
+    # Transcribe voiceover
+    words = FasterWhisperWordTranscriber(paths=paths).transcribe_words()
+    # Build sentences
+    ledger = build_sentence_ledger(words, paths)
 
-    if args.stop_after_shot_match:
-        print("Stopping after shot-match per flag.")
+    # Generate shot match
+    shot_match = LitellmShotMatchOrchestrator(paths).generate_shot_match(
+        analysis=analysis,
+        ledger=ledger,
+        guidance=args.guidance,
+    )
+
+    if args.break_after == "match":
+        print("Stopping after shot match (--break match).")
         return 0
 
     audio_end = max((w.end_sec for w in words), default=0.0)
@@ -380,21 +208,21 @@ def main() -> int:
         audio_duration_sec=max(audio_end, 0.01),
         run_id=analysis.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
-        hook_text=script_path.read_text().splitlines()[0][:120] if script_path.is_file() else None,
     )
 
-    plan_path = run_dir / "render-plan.json"
+    plan_path = paths.render_plan_json()
     plan_dump = render_plan.model_dump(by_alias=True)
     plan_path.write_text(json.dumps(plan_dump, indent=2, ensure_ascii=False) + "\n")
     print(f"Wrote render plan: {plan_path}")
 
-    if args.skip_render:
+    if args.break_after == "assemble":
+        print("Stopping after assemble (--break assemble); skipping Remotion render.")
         return 0
 
     props = plan_dump
     asset_dir = copy_plan_media_to_public(props)
     try:
-        mp4 = resolve_project_path(args.render_output) if args.render_output else run_dir / "render.mp4"
+        mp4 = resolve_project_path(args.render_output) if args.render_output else paths.default_render_mp4()
         run_render_command(
             [
                 "npm",
@@ -412,7 +240,7 @@ def main() -> int:
         shutil.rmtree(asset_dir, ignore_errors=True)
 
     print("\nPipeline complete.")
-    print(f"Run directory: {run_dir}")
+    print(f"Run directory: {paths.run_dir}")
     return 0
 
 

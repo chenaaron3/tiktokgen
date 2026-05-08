@@ -16,6 +16,10 @@ from .media import probe_media
 from .restaurant_tags import RESTAURANT_SEGMENT_DESCRIPTION, RESTAURANT_VLM_TAGS
 from .schema import Clip, IdentifiedShot, TwelveLabsClipRef
 
+# Defaults for TwelveLabs time-based segmentation (used programmatically + CLI fallback).
+DEFAULT_ANALYSIS_MODEL_NAME = "pegasus1.5"
+MIN_SEGMENT_DURATION_SEC = 2.0
+MAX_SEGMENT_DURATION_SEC = 4.0
 
 HASH_CHUNK_BYTES = 4 * 1024 * 1024
 POLL_INTERVAL_SEC = 5.0
@@ -178,14 +182,18 @@ class TwelveLabsVideoAnalyzer:
         self,
         *,
         api_key: str | None = None,
-        model: str = "pegasus1.5",
-        min_segment_duration: float = 2.0,
-        max_segment_duration: float = 4.0,
+        model: str | None = None,
+        min_segment_duration: float | None = None,
+        max_segment_duration: float | None = None,
     ) -> None:
         self.client = TwelveLabs(api_key=api_key or require_api_key())
-        self.model = model
-        self.min_segment_duration = min_segment_duration
-        self.max_segment_duration = max_segment_duration
+        self.model = model if model is not None else DEFAULT_ANALYSIS_MODEL_NAME
+        self.min_segment_duration = (
+            min_segment_duration if min_segment_duration is not None else MIN_SEGMENT_DURATION_SEC
+        )
+        self.max_segment_duration = (
+            max_segment_duration if max_segment_duration is not None else MAX_SEGMENT_DURATION_SEC
+        )
 
     def analyze_video(
         self,

@@ -1,4 +1,8 @@
-"""LLM-backed script generation (LiteLLM)."""
+"""LLM-backed script generation (LiteLLM).
+
+Used by ``render_short`` with a run ``PathUtil``: ``generate(notes)`` returns ``script.txt`` when present,
+otherwise writes ``script.draft.txt`` via LiteLLM and ``SystemExit(0)`` until approved.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +14,7 @@ from dotenv import load_dotenv
 
 from logger import install_local_observability_logger
 from narrative.providers import ScriptGenerator
+from util import PathUtil
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT_PATH = PROJECT_ROOT / "prompts" / "script_generator.md"
@@ -25,36 +30,51 @@ def _load_prompt(path: Path) -> str:
 class LitellmScriptGenerator(ScriptGenerator):
     def __init__(
         self,
+        paths: PathUtil,
         *,
         model: str | None = None,
         prompt_path: Path | None = None,
-        observability_path: str | Path | None = None,
+        observability_path: Path | None = None,
         dotenv_path: Path | None = None,
     ) -> None:
         load_dotenv(dotenv_path or PROJECT_ROOT / ".env")
         if not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY is required in the environment or .env")
+        self._paths = paths
         self._model = model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
         self._prompt_path = prompt_path or DEFAULT_PROMPT_PATH
-        self._obs_path = Path(observability_path) if observability_path else None
-        if self._obs_path is not None:
-            install_local_observability_logger()
+        self._obs_path = (observability_path or paths.script_llm_observability_json()).resolve()
+        self._obs_path.parent.mkdir(parents=True, exist_ok=True)
+        install_local_observability_logger()
 
     def generate(self, notes: str) -> str:
         notes = notes.strip()
+        approved = self._paths.script_txt()
+        if approved.is_file():
+            return approved.read_text()
+
         if not notes:
             raise ValueError("Notes are empty")
+
+        text = self._complete_via_litellm(notes)
+        draft = self._paths.script_draft_txt()
+        draft.write_text(text.strip() + "\n")
+        print(f"Wrote script draft: {draft}")
+        print("Copy or rename script.draft.txt → script.txt before continuing.")
+        raise SystemExit(0)
+
+    def _complete_via_litellm(self, notes: str) -> str:
         system_prompt = _load_prompt(self._prompt_path)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": notes},
         ]
-        metadata = None
-        if self._obs_path is not None:
-            metadata = {"stage": "script_generator", "observabilityPath": str(self._obs_path)}
-        kwargs: dict = {"model": self._model, "messages": messages}
-        if metadata is not None:
-            kwargs["metadata"] = metadata
+        metadata = {"stage": "script_generator", "observabilityPath": str(self._obs_path)}
+        kwargs: dict = {
+            "model": self._model,
+            "messages": messages,
+            "metadata": metadata,
+        }
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content
         if not content:

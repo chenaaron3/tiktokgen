@@ -1,84 +1,54 @@
-"""Resolve a single “project” folder that contains videos + a notes .txt file."""
+"""Repo-root path resolution, run directory layout, bundled footage + ``notes.txt``."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from vlm.media import discover_videos
+from uuid6 import uuid7
 
-# Filenames to ignore when scanning for a lone story / notes file (not exhaustive).
-_SKIPPED_TXT_NAMES = frozenset(
-    name.lower()
-    for name in (
-        "readme.txt",
-        "read_me.txt",
-        "license.txt",
-        "changelog.txt",
-        "credits.txt",
-    )
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def pick_notes_txt(project_dir: Path) -> Path | None:
-    """
-    Prefer ``notes.txt``. Otherwise, if exactly one non-ignored ``*.txt`` exists, use it.
-    If several story-like files remain, return ``None`` (caller surfaces an error).
-    """
-    project_dir = project_dir.resolve()
-    preferred = project_dir / "notes.txt"
-    if preferred.is_file():
-        return preferred.resolve()
-
-    candidates: list[Path] = []
-    for path in sorted(project_dir.glob("*.txt")):
-        if not path.is_file():
-            continue
-        if path.name.lower() in _SKIPPED_TXT_NAMES:
-            continue
-        candidates.append(path)
-
-    if len(candidates) == 1:
-        return candidates[0].resolve()
-    return None
+def resolve_project_path(path: Path) -> Path:
+    expanded = path.expanduser()
+    return expanded.resolve() if expanded.is_absolute() else (PROJECT_ROOT / expanded).resolve()
 
 
-def resolve_bundled_project(project_dir: Path, *, recursive: bool) -> tuple[Path, Path]:
-    """
-    ``project_dir`` contains video files and exactly one logical notes file.
+def find_latest_run_directory(cache_dir: Path) -> Path | None:
+    """Return the subdirectory of `cache_dir` with the newest ``st_mtime``, or ``None`` if empty."""
+    if not cache_dir.is_dir():
+        return None
+    candidates = [
+        p for p in cache_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
-    Returns ``(footage_root, notes_path)`` for VLM + script generation.
-    """
-    project_dir = project_dir.expanduser()
-    if not project_dir.is_dir():
-        raise SystemExit(
-            f"Bundled mode expects a directory with videos + notes: not a directory ({project_dir}). "
-            "Use --notes-file if you are passing a single video file."
-        )
 
-    resolved_dir = project_dir.resolve()
-    notes = pick_notes_txt(resolved_dir)
-    if notes is None:
-        ambiguous = sorted(p for p in resolved_dir.glob("*.txt") if p.is_file())
-        names = [p.name for p in ambiguous]
-        story_like = [n for n in names if n.lower() not in _SKIPPED_TXT_NAMES]
-        ignored = [n for n in names if n.lower() in _SKIPPED_TXT_NAMES]
-        if len(story_like) > 1:
+def resolve_run_directory(
+    *,
+    run_dir_arg: Path | None,
+    resume: bool,
+    cache_dir_arg: Path,
+) -> Path:
+    """Pick explicit ``--run-dir``, latest under cache (``--resume``), or ``cache-dir/<new-uuid>``."""
+    if run_dir_arg is not None and resume:
+        raise SystemExit("Use only one of --run-dir or --resume (not both).")
+    cache_base = resolve_project_path(cache_dir_arg)
+    cache_base.mkdir(parents=True, exist_ok=True)
+    if run_dir_arg is not None:
+        return resolve_project_path(run_dir_arg)
+    if resume:
+        latest = find_latest_run_directory(cache_base)
+        if latest is None:
             raise SystemExit(
-                f"Multiple story .txt files in {resolved_dir}: {', '.join(story_like)}. "
-                "Rename the one you want to notes.txt, or pass --notes-file PATH explicitly."
+                f"No run directories found under {cache_base}; "
+                "run without --resume to create a new UUID run folder."
             )
-        raise SystemExit(
-            f"No notes file in {resolved_dir}. "
-            "Add notes.txt (recommended) or exactly one other .txt (besides readme/license), "
-            "or pass --notes-file."
-            + (f" (Ignored .txt: {', '.join(ignored)})" if ignored else "")
-        )
-
-    try:
-        discover_videos(resolved_dir, recursive=recursive)
-    except FileNotFoundError as error:
-        raise SystemExit(str(error)) from None
-    except ValueError as error:
-        raise SystemExit(str(error)) from None
-
-    return resolved_dir, notes
+        print(f"Resuming latest run: {latest}")
+        return latest
+    new_id = str(uuid7())
+    run = cache_base / new_id
+    print(f"New run directory: {run}")
+    return run

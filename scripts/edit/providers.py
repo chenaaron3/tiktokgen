@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
+from contracts import SentenceLedger
 from edit.schema_shot_match import ShotMatch
+from vlm.schema import VlmAnalysis
 
 
 @runtime_checkable
@@ -12,7 +14,7 @@ class ShotMatchOrchestrator(Protocol):
     def generate_shot_match(
         self,
         *,
-        sentences: list[dict[str, Any]],
-        vlm_shots: list[dict[str, Any]],
+        analysis: VlmAnalysis,
+        ledger: SentenceLedger,
         guidance: str | None,
     ) -> ShotMatch: ...

@@ -41,11 +41,6 @@ def parse_args() -> argparse.Namespace:
         help="Directory to write transcript files (<stem>.txt by default).",
     )
     parser.add_argument(
-        "--recursive",
-        action="store_true",
-        help="When source is a directory, include nested videos.",
-    )
-    parser.add_argument(
         "--max-concurrency",
         type=int,
         default=6,
@@ -355,7 +350,7 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        videos = discover_videos(source, recursive=args.recursive)
+        videos = discover_videos(source)
     except (FileNotFoundError, ValueError) as err:
         print(err, file=sys.stderr)
         return 1

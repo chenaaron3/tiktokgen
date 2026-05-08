@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 
 from contracts import SentenceEntry, SentenceLedger, WordToken
+from util import PathUtil
 
 _SENTENCE_END = re.compile(r"[.!?]\s*$")
 
 
-def build_sentence_ledger(words: list[WordToken]) -> SentenceLedger:
-    """Group words into sentences ending in . ! ? and compute ceil-duration beats."""
+def build_sentence_ledger(words: list[WordToken], paths: PathUtil | None = None) -> SentenceLedger:
+    """Group words into sentences ending in . ! ? and compute ceil-duration beats.
+
+    When ``paths`` is set, writes ``sentence-ledger.json`` under the run directory.
+    """
     if not words:
-        return SentenceLedger(sentences=[])
+        ledger = SentenceLedger(sentences=[])
+        if paths is not None:
+            ledger_path = paths.sentence_ledger_json()
+            ledger_path.write_text(json.dumps(ledger.model_dump(by_alias=True), indent=2) + "\n")
+        return ledger
 
     sentences: list[SentenceEntry] = []
     buffer: list[WordToken] = []
@@ -48,4 +57,8 @@ def build_sentence_ledger(words: list[WordToken]) -> SentenceLedger:
             flush()
 
     flush()
-    return SentenceLedger(sentences=sentences)
+    ledger = SentenceLedger(sentences=sentences)
+    if paths is not None:
+        ledger_path = paths.sentence_ledger_json()
+        ledger_path.write_text(json.dumps(ledger.model_dump(by_alias=True), indent=2) + "\n")
+    return ledger

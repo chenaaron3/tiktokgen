@@ -6,6 +6,7 @@ from pathlib import Path
 
 from contracts import WordToken
 from narrative.providers import ScriptGenerator, TextToSpeech, WordTranscriber
+from util import PathUtil
 
 
 class StaticScriptGenerator(ScriptGenerator):
@@ -17,21 +18,20 @@ class StaticScriptGenerator(ScriptGenerator):
 
 
 class StaticTts(TextToSpeech):
-    """Writes a tiny placeholder file (not a valid MP3—only for I/O mocks)."""
+    """Returns the nominal voice path without touching disk."""
 
-    def __init__(self, marker: bytes = b"UNITTEST_TTS") -> None:
-        self._marker = marker
+    def __init__(self, paths: PathUtil) -> None:
+        self._paths = paths
 
-    def synthesize(self, script_text: str, output_mp3: Path) -> None:
-        output_mp3.parent.mkdir(parents=True, exist_ok=True)
-        output_mp3.write_bytes(self._marker)
+    def synthesize(self, script_text: str) -> Path:
+        return self._paths.voiceover_mp3()
 
 
 class StaticWordTranscriber(WordTranscriber):
-    """Returns predefined tokens without reading audio."""
+    """Returns predefined tokens in memory only."""
 
     def __init__(self, words: list[WordToken]) -> None:
         self._words = words
 
-    def transcribe_words(self, audio_mp3: Path) -> list[WordToken]:
+    def transcribe_words(self) -> list[WordToken]:
         return [w.model_copy(deep=True) for w in self._words]
