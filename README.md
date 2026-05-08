@@ -21,7 +21,7 @@ Shared Python code is grouped under `scripts/`:
 - `scripts/edit/`: `shot-match.json` (LLM / review) and deterministic `render-plan.json`.
 - `scripts/narrative/`: script LLM, ElevenLabs TTS, faster-whisper word timings, sentence ledger.
 - `scripts/contracts.py`: shared sentence/token DTOs.
-- `scripts/project_inputs.py`: repo-root path helpers; `--run-dir`/`--resume` cache layout.
+- `scripts/project_inputs.py`: repo-root path helpers; `--run-id` / `--resume` cache layout.
 - `scripts/util/path_util.py`: run artifact paths (`PathUtil`), bundled project folder resolution (`resolve_bundled_project`, `notes.txt`).
 - `scripts/fixtures/pipeline.py`: sample words + sample `ShotMatch` for tests.
 - `scripts/logger/`: local LiteLLM observability logger.
@@ -44,28 +44,27 @@ Run the **narrative pipeline** (script → TTS → Whisper → VLM → shot-matc
 
 **SOURCE** is always a **project folder**: your video clips and **`notes.txt`** (exact filename) in the **same directory** (for example `assets/05-03`).
 
-**Explicit run folder:**
+**Fixed run id** (folder name only, resolved as `--cache-dir`/`<run-id>`):
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
-  --run-dir cache/my-run \
-  --guidance "stylish West Village pacing"
+PYTHONPATH=scripts uv run python scripts/run_pipeline.py assets/05-03 \
+  --run-id 019e0648-d859-79d1-bd1c-dcf5e431e360
 ```
 
-**Default cache run** (new UUID under `--cache-dir` when you omit `--run-dir` / `--resume`):
+**Default cache run** (new UUID under `--cache-dir` when you omit `--run-id` / `--resume`):
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03
+PYTHONPATH=scripts uv run python scripts/run_pipeline.py assets/05-03
 ```
 
-**Resume latest run:** reuse the subdirectory of `--cache-dir` that was modified most recently (do not combine with `--run-dir`):
+**Resume latest run:** reuse the subdirectory of `--cache-dir` that was modified most recently (do not combine with `--run-id`):
 
 ```sh
-PYTHONPATH=scripts uv run python scripts/render_short.py assets/05-03 \
+PYTHONPATH=scripts uv run python scripts/run_pipeline.py assets/05-03 \
   --resume
 ```
 
-Artifacts land under your chosen `--run-dir` or under `cache/<uuid>/` / the resumed folder (`script.txt`, `voiceover.mp3`, etc.; see below).
+Artifacts land under `cache/<run-id>/` (chosen explicitly, new UUID, or resumed folder): `script.txt`, `voiceover.mp3`, etc. (see below).
 
 Env vars: `TWELVELABS_API_KEY`, `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`. Optional override: `ELEVENLABS_VOICE_ID` (defaults to the same ElevenLabs voice id as shortgen: `NFG5qt843uXKj4pFvR7C`).
 
@@ -91,6 +90,6 @@ npm run render -- cache/<run-id>/render.mp4 --props "$(python -c 'from pathlib i
 
 Remotion composition `AiShort` reads `render-plan.json` (voice + beats + word captions).
 
-To continue a fixed run folder, pass **`--run-dir`**. Existing files skip their stages (for example cached `vlm-analysis.json`, `shot-match.json`, `voiceover.mp3`).
+To continue a specific run, pass **`--run-id`** with the folder name under **`--cache-dir`** (for example the UUID). Existing files skip their stages (for example cached `vlm-analysis.json`, `shot-match.json`, `voiceover.mp3`).
 
-Alternatively use **`--resume`** instead of **`--run-dir`** to reuse the newest run folder under **`--cache-dir`** (see above).
+Alternatively use **`--resume`** instead of **`--run-id`** to reuse the newest run folder under **`--cache-dir`** (see above).

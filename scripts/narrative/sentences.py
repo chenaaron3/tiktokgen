@@ -3,43 +3,72 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 
-from contracts import SentenceEntry, SentenceLedger, WordToken
+from contracts import SentenceEntry, SentenceLedger, WordToken, sentence_beat_count
 from util import PathUtil
 
 _SENTENCE_END = re.compile(r"[.!?]\s*$")
 
 
-def build_sentence_ledger(words: list[WordToken], paths: PathUtil | None = None) -> SentenceLedger:
-    """Group words into sentences ending in . ! ? and compute ceil-duration beats.
+def build_sentence_ledger(
+    words: list[WordToken],
+    audio_duration_sec: float,
+    paths: PathUtil | None = None,
+) -> SentenceLedger:
+    """Group words into sentences and normalize to span ``[0, audio_duration_sec]``.
 
     When ``paths`` is set, writes ``sentence-ledger.json`` under the run directory.
     """
+    if audio_duration_sec <= 0:
+        raise ValueError("audio_duration_sec must be positive")
     if not words:
-        ledger = SentenceLedger(sentences=[])
-        if paths is not None:
-            ledger_path = paths.sentence_ledger_json()
-            ledger_path.write_text(json.dumps(ledger.model_dump(by_alias=True), indent=2) + "\n")
-        return ledger
+        raise ValueError("cannot build sentence ledger from empty words")
 
-    sentences: list[SentenceEntry] = []
+    sentence_texts: list[str] = []
+    sentence_word_end_secs: list[float] = []
     buffer: list[WordToken] = []
 
     def flush() -> None:
         nonlocal buffer
         if not buffer:
             return
-        idx = len(sentences)
         text = " ".join(w.word.strip() for w in buffer).strip()
         if not text:
             buffer = []
             return
-        start = buffer[0].start_sec
-        end = buffer[-1].end_sec
+        sentence_texts.append(text)
+        sentence_word_end_secs.append(buffer[-1].end_sec)
+        buffer = []
+
+    for w in words:
+        buffer.append(w)
+        if _SENTENCE_END.search(w.word.strip()):
+            flush()
+
+    flush()
+    if not sentence_texts:
+        raise ValueError("cannot build sentence ledger from empty sentence text")
+    if sentence_word_end_secs[-1] > audio_duration_sec + 1e-6:
+        raise ValueError(
+            "audio_duration_sec must be >= end of last transcribed word: "
+            f"{audio_duration_sec:.6f} < {sentence_word_end_secs[-1]:.6f}"
+        )
+
+    sentences: list[SentenceEntry] = []
+    prev_end = 0.0
+    for idx, text in enumerate(sentence_texts):
+        start = prev_end
+        if idx == len(sentence_texts) - 1:
+            end = audio_duration_sec
+        else:
+            end = sentence_word_end_secs[idx]
+        if end < start:
+            raise ValueError(
+                f"sentence window must be non-decreasing (sentence s{idx}: {start:.6f} -> {end:.6f})"
+            )
         duration = max(1e-9, end - start)
-        beat_count = max(1, math.ceil(duration - 1e-12))
+        beat_count = sentence_beat_count(duration)
         sentences.append(
             SentenceEntry(
                 sentenceId=f"s{idx}",
@@ -49,14 +78,8 @@ def build_sentence_ledger(words: list[WordToken], paths: PathUtil | None = None)
                 beatCount=beat_count,
             )
         )
-        buffer = []
+        prev_end = end
 
-    for w in words:
-        buffer.append(w)
-        if _SENTENCE_END.search(w.word.strip()):
-            flush()
-
-    flush()
     ledger = SentenceLedger(sentences=sentences)
     if paths is not None:
         ledger_path = paths.sentence_ledger_json()

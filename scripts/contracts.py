@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+import math
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Timeline: one visual beat about every N seconds of sentence audio (larger → fewer cuts).
+TARGET_SECONDS_PER_BEAT = 2.0
+
+
+def sentence_beat_count(duration_sec: float) -> int:
+    """Map a sentence's audio span to how many shots the shot-match step must assign."""
+    if duration_sec <= 0:
+        raise ValueError("duration_sec must be positive")
+    return max(1, math.ceil((duration_sec - 1e-12) / TARGET_SECONDS_PER_BEAT))
 
 
 class WordToken(BaseModel):
@@ -36,7 +48,10 @@ class SentenceEntry(BaseModel):
 
 
 class SentenceLedger(BaseModel):
-    """Deterministic sentence timings and beat counts (input to shot-match LLM)."""
+    """Deterministic sentence timings and beat counts (input to shot-match LLM).
+
+    ``beatCount`` per sentence follows ``sentence_beat_count`` / ``TARGET_SECONDS_PER_BEAT``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

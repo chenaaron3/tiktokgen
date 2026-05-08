@@ -1,6 +1,6 @@
 """LLM-backed script generation (LiteLLM).
 
-Used by ``render_short`` with a run ``PathUtil``: ``generate(notes)`` returns ``script.txt`` when present,
+Used by ``run_pipeline`` with a run ``PathUtil``: ``generate(notes)`` returns ``script.txt`` when present,
 otherwise writes ``script.draft.txt`` via LiteLLM and ``SystemExit(0)`` until approved.
 """
 

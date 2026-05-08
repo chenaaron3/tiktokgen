@@ -4,25 +4,19 @@
 from __future__ import annotations
 
 import argparse
-import json
-import shutil
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-
 from dotenv import load_dotenv
 from edit import LitellmShotMatchOrchestrator
 from edit.assemble import assemble_render_plan, build_resolved_sentences
 from narrative import ElevenLabsTts, FasterWhisperWordTranscriber, LitellmScriptGenerator, build_sentence_ledger
 from pydantic import ValidationError
-from project_inputs import PROJECT_ROOT, resolve_project_path, resolve_run_directory
+from project_inputs import PROJECT_ROOT, resolve_run_directory
 from util import PathUtil, resolve_bundled_project
+from util.render import run_remotion_render
 from vlm import TwelveLabsVideoAnalysisBackend
-
-PUBLIC_DIR = PROJECT_ROOT / "remotion" / "public"
-STATIC_PREFIX = "static:"
+from vlm.media import probe_media
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,12 +34,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--run-dir",
-        type=Path,
+        "--run-id",
         default=None,
+        metavar="ID",
         help=(
-            "Exact run folder for artifacts. If omitted (and without --resume), a new UUID directory "
-            "is created under --cache-dir."
+            "Run folder name under --cache-dir (e.g. UUID). If omitted (and without --resume), "
+            "a new UUID directory is created under --cache-dir."
         ),
     )
     parser.add_argument(
@@ -59,13 +53,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Use the most recently modified subdirectory of --cache-dir as the run directory "
-            "(conflicts with --run-dir)."
+            "(conflicts with --run-id)."
         ),
-    )
-    parser.add_argument(
-        "--guidance",
-        default="Cohesive TikTok restaurant b-roll pacing.",
-        help="Creative hint passed to shot-match LLM.",
     )
     parser.add_argument(
         "--break",
@@ -80,76 +69,14 @@ def parse_args() -> argparse.Namespace:
             "match (after shot-match.json), assemble (after render-plan.json; Remotion render skipped)."
         ),
     )
-    parser.add_argument(
-        "--render-output",
-        type=Path,
-        help="Destination MP4 path. Defaults to <run-dir>/render.mp4.",
-    )
     return parser.parse_args()
-
-
-def run_render_command(command: list[str]) -> None:
-    print(f"\n==> Remotion render\n{' '.join(command)}")
-    proc = subprocess.run(command, cwd=str(PROJECT_ROOT), check=False, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(f"render failed with exit code {proc.returncode}")
-
-
-def local_source_path(raw: str) -> Path | None:
-    if raw.startswith((STATIC_PREFIX, "http://", "https://")):
-        return None
-    if raw.startswith("file://"):
-        from urllib.parse import unquote, urlparse
-
-        return Path(unquote(urlparse(raw).path)).expanduser().resolve()
-    return Path(raw).expanduser().resolve()
-
-
-def copy_plan_media_to_public(plan: dict[str, Any]) -> Path:
-    """Rewrite voice + beat sourcePath to static:* under public."""
-    import uuid
-
-    asset_dir = PUBLIC_DIR / "render-assets" / uuid.uuid4().hex
-    asset_dir.mkdir(parents=True, exist_ok=False)
-
-    static_map: dict[str, str] = {}
-
-    def rewrite(path_str: str | None) -> str | None:
-        if not path_str or not isinstance(path_str, str):
-            return path_str
-        p = local_source_path(path_str)
-        if p is None:
-            return path_str
-        if not p.is_file():
-            raise RuntimeError(f"Missing media file: {p}")
-        resolved = p.resolve()
-        key = str(resolved)
-        if key not in static_map:
-            dst = asset_dir / f"{len(static_map):03d}-{resolved.name}"
-            shutil.copy2(resolved, dst)
-            rel = dst.relative_to(PUBLIC_DIR).as_posix()
-            static_map[key] = f"{STATIC_PREFIX}{rel}"
-        return static_map[key]
-
-    voice = plan.get("voiceoverStaticPath")
-    if isinstance(voice, str):
-        clean = voice[len(STATIC_PREFIX) :] if voice.startswith(STATIC_PREFIX) else voice
-        new_voice = rewrite(clean)
-        if new_voice:
-            plan["voiceoverStaticPath"] = new_voice
-
-    for beat in plan.get("beats") or []:
-        if isinstance(beat, dict) and isinstance(beat.get("sourcePath"), str):
-            beat["sourcePath"] = rewrite(beat["sourcePath"])
-
-    return asset_dir
 
 
 def main() -> int:
     load_dotenv(PROJECT_ROOT / ".env")
     args = parse_args()
     run_dir = resolve_run_directory(
-        run_dir_arg=args.run_dir,
+        run_id=args.run_id,
         resume=args.resume,
         cache_dir_arg=args.cache_dir,
     )
@@ -177,6 +104,9 @@ def main() -> int:
 
     # Generate voiceover
     voice_path = ElevenLabsTts(paths=paths).synthesize(script_text)
+    voice_duration = probe_media(voice_path).get("durationSec")
+    if voice_duration is None:
+        raise RuntimeError(f"Unable to determine voiceover duration for {voice_path}")
 
     if args.break_after == "tts":
         print("Stopping after TTS (--break tts).")
@@ -185,21 +115,19 @@ def main() -> int:
     # Transcribe voiceover
     words = FasterWhisperWordTranscriber(paths=paths).transcribe_words()
     # Build sentences
-    ledger = build_sentence_ledger(words, paths)
+    ledger = build_sentence_ledger(words, float(voice_duration), paths)
 
     # Generate shot match
     shot_match = LitellmShotMatchOrchestrator(paths).generate_shot_match(
         analysis=analysis,
         ledger=ledger,
-        guidance=args.guidance,
     )
 
     if args.break_after == "match":
         print("Stopping after shot match (--break match).")
         return 0
 
-    audio_end = max((w.end_sec for w in words), default=0.0)
-    audio_duration_sec = max(audio_end, 0.01)
+    audio_duration_sec = max(float(voice_duration), 0.01)
     resolved_sentences = build_resolved_sentences(
         shot_match=shot_match,
         analysis=analysis,
@@ -214,36 +142,14 @@ def main() -> int:
         audio_duration_sec=audio_duration_sec,
         run_id=analysis.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
+        paths=paths,
     )
-
-    plan_path = paths.render_plan_json()
-    plan_dump = render_plan.model_dump(by_alias=True)
-    plan_path.write_text(json.dumps(plan_dump, indent=2, ensure_ascii=False) + "\n")
-    print(f"Wrote render plan: {plan_path}")
 
     if args.break_after == "assemble":
         print("Stopping after assemble (--break assemble); skipping Remotion render.")
         return 0
 
-    props = plan_dump
-    asset_dir = copy_plan_media_to_public(props)
-    try:
-        mp4 = resolve_project_path(args.render_output) if args.render_output else paths.default_render_mp4()
-        run_render_command(
-            [
-                "npm",
-                "run",
-                "render",
-                "--",
-                str(mp4),
-                "--public-dir",
-                str(PUBLIC_DIR),
-                "--props",
-                json.dumps(props, ensure_ascii=False),
-            ]
-        )
-    finally:
-        shutil.rmtree(asset_dir, ignore_errors=True)
+    run_remotion_render(render_plan, paths)
 
     print("\nPipeline complete.")
     print(f"Run directory: {paths.run_dir}")

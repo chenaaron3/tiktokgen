@@ -321,7 +321,7 @@ def test_source_window_shifts_left_when_key_near_right_edge():
     plan = assemble_render_plan(
         resolved_sentences=resolved,
         whisper_words=[],
-        voiceover_static_path="static:x",
+        voiceover_static_path="/tmp/voice.mp3",
         audio_duration_sec=1.5,
         run_id="r",
         created_at="t",

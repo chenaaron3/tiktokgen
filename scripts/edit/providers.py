@@ -16,5 +16,4 @@ class ShotMatchOrchestrator(Protocol):
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
-        guidance: str | None,
     ) -> ShotMatch: ...

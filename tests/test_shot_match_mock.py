@@ -61,5 +61,5 @@ def test_static_shot_match_orchestrator():
     )
 
     orch = StaticShotMatchOrchestrator(fake)
-    out = orch.generate_shot_match(analysis=analysis, ledger=ledger, guidance=None)
+    out = orch.generate_shot_match(analysis=analysis, ledger=ledger)
     assert out.model_dump() == fake.model_dump()

@@ -305,10 +305,6 @@
       "title": "Createdat",
       "type": "string"
     },
-    "guidance": {
-      "title": "Guidance",
-      "type": "string"
-    },
     "theme": {
       "$ref": "#/$defs/Theme"
     },
@@ -357,7 +353,6 @@
     "runId",
     "sourceAnalysisRef",
     "createdAt",
-    "guidance",
     "theme",
     "durationSec",
     "locations",

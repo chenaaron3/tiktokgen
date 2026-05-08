@@ -42,7 +42,7 @@ class RenderPlan(BaseModel):
     duration_sec: float = Field(gt=0.0, alias="durationSec")
     voiceover_static_path: str = Field(
         alias="voiceoverStaticPath",
-        description="Path passed to Remotion as static:, e.g. static:render-assets/xyz/voice.mp3",
+        description="Path relative to remotion/public, e.g. render-assets/xyz/voice.mp3",
     )
     theme: RenderTheme | None = None
     beats: list[RenderBeat]

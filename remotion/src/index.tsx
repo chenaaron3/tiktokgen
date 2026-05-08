@@ -53,18 +53,7 @@ const EMPTY_PLAN: RenderPlanProps = {
   words: [],
 };
 
-const fileUrl = (sourcePath: string) => {
-  if (sourcePath.startsWith('static:')) {
-    return staticFile(sourcePath.slice('static:'.length));
-  }
-  if (sourcePath.startsWith('http://') || sourcePath.startsWith('https://')) {
-    return sourcePath;
-  }
-  if (sourcePath.startsWith('file://')) {
-    return encodeURI(sourcePath);
-  }
-  return encodeURI(`file://${sourcePath}`);
-};
+const fileUrl = (sourcePath: string) => staticFile(sourcePath);
 
 const secondsToFrames = (seconds: number, fps: number) =>
   Math.max(0, Math.round(seconds * fps));

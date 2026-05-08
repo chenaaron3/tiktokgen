@@ -5,7 +5,7 @@ from narrative.sentences import build_sentence_ledger
 
 
 def test_fixture_words_produce_ledger():
-    ledger = build_sentence_ledger(PIPELINE_SAMPLE_WORDS)
+    ledger = build_sentence_ledger(PIPELINE_SAMPLE_WORDS, audio_duration_sec=0.72)
     assert ledger.sentences and ledger.sentences[0].beat_count >= 1
 
 

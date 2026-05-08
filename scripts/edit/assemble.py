@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
 
 from contracts import SentenceEntry, SentenceLedger, WordToken
 from edit.schema_render_plan import RenderBeat, RenderPlan, RenderTheme, RenderWord
 from edit.schema_shot_match import ShotMatch, ShotRef
+from util.path_util import PathUtil
 from vlm.schema import Clip, IdentifiedShot, VlmAnalysis
 
 EPSILON = 1e-6
@@ -169,7 +171,6 @@ def build_resolved_sentences(
 
 
 def assemble_render_plan(
-    *,
     resolved_sentences: Sequence[ResolvedSentence],
     whisper_words: Sequence[WordToken],
     voiceover_static_path: str,
@@ -177,8 +178,12 @@ def assemble_render_plan(
     run_id: str,
     created_at: str,
     hook_text: str | None = None,
+    paths: PathUtil | None = None,
 ) -> RenderPlan:
-    """Build RenderPlan + validate beats / assignments / lengths."""
+    """Build RenderPlan + validate beats / assignments / lengths.
+
+    When ``paths`` is set, writes ``render-plan.json`` under the run directory.
+    """
     warnings: list[str] = []
     beats_out: list[RenderBeat] = []
     prev_pair: tuple[str, str] | None = None
@@ -243,7 +248,7 @@ def assemble_render_plan(
             f"{beats_out[-1].timeline_end_sec:.6f} vs {audio_duration_sec:.6f}"
         )
 
-    return RenderPlan(
+    plan = RenderPlan(
         runId=run_id,
         createdAt=created_at,
         durationSec=audio_duration_sec,
@@ -253,3 +258,9 @@ def assemble_render_plan(
         words=words_render,
         warnings=warnings,
     )
+    if paths is not None:
+        plan_path = paths.render_plan_json()
+        plan_dump = plan.model_dump(by_alias=True)
+        plan_path.write_text(json.dumps(plan_dump, indent=2, ensure_ascii=False) + "\n")
+        print(f"Wrote render plan: {plan_path}")
+    return plan

@@ -23,21 +23,35 @@ def test_find_latest_empty_returns_none(tmp_path: Path) -> None:
     assert find_latest_run_directory(tmp_path) is None
 
 
-def test_resolve_run_dir_explicit_roundtrip(tmp_path: Path, monkeypatch) -> None:
-    explicit = tmp_path / "my-run"
-    monkeypatch.chdir(tmp_path.parent)
+def test_resolve_run_id_under_cache(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    run_name = "019e0648-d859-79d1-bd1c-dcf5e431e360"
+    expected = cache / run_name
+    expected.mkdir(parents=True, exist_ok=True)
     out = resolve_run_directory(
-        run_dir_arg=explicit,
+        run_id=run_name,
         resume=False,
-        cache_dir_arg=tmp_path / "unused-cache",
+        cache_dir_arg=cache,
     )
-    assert out == explicit.resolve()
+    assert out == expected.resolve()
+
+
+def test_resolve_run_id_rejects_path(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    with pytest.raises(SystemExit, match="single folder name"):
+        resolve_run_directory(
+            run_id="evil/../nested",
+            resume=False,
+            cache_dir_arg=cache,
+        )
 
 
 def test_resolve_resume_conflict(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="not both"):
         resolve_run_directory(
-            run_dir_arg=tmp_path / "explicit-run-id",
+            run_id="some-id",
             resume=True,
             cache_dir_arg=tmp_path / "cache",
         )
@@ -46,7 +60,7 @@ def test_resolve_resume_conflict(tmp_path: Path) -> None:
 def test_resolve_new_uuid_under_cache(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
     cache.mkdir(parents=True, exist_ok=True)
-    out = resolve_run_directory(run_dir_arg=None, resume=False, cache_dir_arg=cache)
+    out = resolve_run_directory(run_id=None, resume=False, cache_dir_arg=cache)
     assert out.parent.resolve() == cache.resolve()
     assert len(out.name) > 24
 
@@ -55,4 +69,4 @@ def test_resume_requires_existing_subdirectory(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
     cache.mkdir()
     with pytest.raises(SystemExit, match=r"No run directories"):
-        resolve_run_directory(run_dir_arg=None, resume=True, cache_dir_arg=cache)
+        resolve_run_directory(run_id=None, resume=True, cache_dir_arg=cache)

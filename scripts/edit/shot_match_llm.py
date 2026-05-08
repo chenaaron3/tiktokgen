@@ -19,6 +19,9 @@ from util import PathUtil
 from vlm.schema import VlmAnalysis
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SHOT_GENERATOR_SYSTEM_PROMPT = (PROJECT_ROOT / "prompts" / "shot_generator.md").read_text(
+    encoding="utf-8"
+)
 SHOT_MATCH_MODEL = "openai/gpt-4.1-mini"
 
 
@@ -51,7 +54,6 @@ class LitellmShotMatchOrchestrator:
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
-        guidance: str | None,
     ) -> ShotMatch:
         shot_path = self._paths.shot_match_json()
         if shot_path.is_file():
@@ -76,16 +78,7 @@ class LitellmShotMatchOrchestrator:
                 "strict": True,
             },
         }
-        system_prompt = (
-            "You pick b-roll shots for a TikTok-style restaurant voiceover. "
-            "Return strict JSON only. Populate assignments: one entry per narration sentence "
-            "(sentenceId, text copied verbatim from the input, shots). "
-            "Each entry must have exactly beatCount shots in speech order. "
-            "Do not repeat the same (clipId,shotId) on consecutive beats across the whole edit. "
-            "Prefer higher confidenceScore; use weaker shots only if nothing else fits."
-        )
         payload = {
-            "guidance": guidance,
             "sentences": sentences_payload,
             "vlmShots": vlm_shots,
         }
@@ -93,7 +86,7 @@ class LitellmShotMatchOrchestrator:
         raw = _chat_completion_json(
             model=SHOT_MATCH_MODEL,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": SHOT_GENERATOR_SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ],
             response_format=response_format,
@@ -126,6 +119,5 @@ class StaticShotMatchOrchestrator:
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
-        guidance: str | None,
     ) -> ShotMatch:
         return self._fixed.model_copy(deep=True)

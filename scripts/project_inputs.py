@@ -28,17 +28,22 @@ def find_latest_run_directory(cache_dir: Path) -> Path | None:
 
 def resolve_run_directory(
     *,
-    run_dir_arg: Path | None,
+    run_id: str | None,
     resume: bool,
     cache_dir_arg: Path,
 ) -> Path:
-    """Pick explicit ``--run-dir``, latest under cache (``--resume``), or ``cache-dir/<new-uuid>``."""
-    if run_dir_arg is not None and resume:
-        raise SystemExit("Use only one of --run-dir or --resume (not both).")
+    """Pick ``cache-dir/<run-id>``, latest under cache (``--resume``), or ``cache-dir/<new-uuid>``."""
+    if run_id is not None and resume:
+        raise SystemExit("Use only one of --run-id or --resume (not both).")
     cache_base = resolve_project_path(cache_dir_arg)
     cache_base.mkdir(parents=True, exist_ok=True)
-    if run_dir_arg is not None:
-        return resolve_project_path(run_dir_arg)
+    if run_id is not None:
+        rid = run_id.strip()
+        if not rid:
+            raise SystemExit("--run-id must not be empty.")
+        if rid in {".", ".."} or "/" in rid or "\\" in rid:
+            raise SystemExit("--run-id must be a single folder name (e.g. UUID), not a path.")
+        return (cache_base / rid).resolve()
     if resume:
         latest = find_latest_run_directory(cache_base)
         if latest is None:
