@@ -38,12 +38,12 @@ def _shot_map(analysis: VlmAnalysis) -> dict[tuple[str, str], tuple[Clip, Identi
 
 
 def resolve_source_window(
-    key_instant_sec: float,
+    key_instant_start_sec: float,
     shot: IdentifiedShot,
     clip: Clip,
     timeline_duration_sec: float,
 ) -> tuple[float, float]:
-    """Build a fixed-duration source window anchored at ``key_instant_sec``.
+    """Build a fixed-duration source window anchored at ``key_instant_start_sec``.
 
     If the right edge overflows shot/clip bounds, shift the whole window left to preserve
     duration while keeping playbackRate exactly 1.
@@ -67,8 +67,8 @@ def resolve_source_window(
             f"(available {max_duration:.3f}s)"
         )
 
-    s = key_instant_sec
-    e = key_instant_sec + td
+    s = key_instant_start_sec
+    e = key_instant_start_sec + td
 
     if e > hi:
         shift = e - hi
@@ -205,7 +205,7 @@ def assemble_render_plan(
             timeline_end = timeline_start + allocated_shot_time
             timeline_cursor = timeline_end
             source_start, source_end = resolve_source_window(
-                resolved_shot.shot.key_instant_sec,
+                resolved_shot.shot.key_instant_start_sec,
                 resolved_shot.shot,
                 resolved_shot.clip,
                 allocated_shot_time,

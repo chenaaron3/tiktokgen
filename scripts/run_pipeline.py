@@ -38,15 +38,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="ID",
         help=(
-            "Run folder name under --cache-dir (e.g. UUID). If omitted (and without --resume), "
-            "a new UUID directory is created under --cache-dir."
+            "Run folder name under --cache-dir (YYYYMMDD-HHMMSS or with -## suffix). "
+            "If omitted (and without --resume), a new timestamp directory is created."
         ),
     )
     parser.add_argument(
         "--cache-dir",
         type=Path,
         default=Path("cache"),
-        help="Base directory scanned by --resume and used for new UUID runs (default: cache/).",
+        help="Base directory scanned by --resume and used for new timestamp runs (default: cache/).",
     )
     parser.add_argument(
         "--resume",

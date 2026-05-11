@@ -17,7 +17,13 @@ PIPELINE_SAMPLE_SHOT_MATCH = ShotMatch(
         SentenceAssignment(
             sentenceId="s0",
             text="Great bite.",
-            shots=[ShotRef(clipId="fixture-clip-id", shotId="fixture-shot-id")],
+            shots=[
+                ShotRef(
+                    clipId="fixture-clip-id",
+                    shotId="fixture-shot-id",
+                    reasoning="Shows the bite to support the narration.",
+                )
+            ],
         ),
     ],
 )

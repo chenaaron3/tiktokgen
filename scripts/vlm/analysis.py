@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from uuid6 import uuid7
 
+from project_inputs import create_run_directory
 from .media import discover_videos, extend_video_below_minimum_twelvelabs_duration, probe_media
 from .schema import Clip, Provider, VlmAnalysis
 from .twelvelabs import (
@@ -26,7 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MIN_TWELVELABS_VIDEO_DURATION_SEC = 4.0
 
 # Concurrent video workers in ``run()`` (TwelveLabs API batch); fixed default for programmatic use.
-MAX_PARALLEL_VIDEO_ANALYSES = 10
+MAX_PARALLEL_VIDEO_ANALYSES = 20
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,12 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--cache-dir",
         type=Path,
         default=Path("cache"),
-        help="Base directory for run outputs. Files are written to <cache-dir>/<run-uuid>/.",
+        help="Base directory for run outputs. Files are written to <cache-dir>/<run-timestamp>/.",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        help="Exact output directory for this run. Overrides --cache-dir and run UUID directory creation.",
+        help="Exact output directory for this run. Overrides --cache-dir and timestamp directory creation.",
     )
     parser.add_argument(
         "--min-segment-duration",
@@ -152,8 +152,8 @@ def run(
         raise SystemExit(f"Source must be a file or directory: {source_path}")
 
     if output_dir is None:
-        run_id = str(uuid7())
-        resolved_output_dir = cache_dir.expanduser() / run_id
+        resolved_output_dir = create_run_directory(cache_dir.expanduser())
+        run_id = resolved_output_dir.name
     else:
         resolved_output_dir = output_dir.expanduser()
         run_id = resolved_output_dir.name

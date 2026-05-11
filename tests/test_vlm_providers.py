@@ -28,7 +28,7 @@ def _minimal_fake_analysis(source: Path) -> dict:
                 "endSec": 1.0,
                 "vlmTag": "not_suitable",
                 "confidenceScore": 0.5,
-                "keyInstantSec": 0.5,
+                "keyInstantStartSec": 0.5,
                 "reasoning": "fake",
             }
         ],

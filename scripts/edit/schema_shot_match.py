@@ -10,6 +10,7 @@ class ShotRef(BaseModel):
 
     clip_id: str = Field(alias="clipId")
     shot_id: str = Field(alias="shotId")
+    reasoning: str
 
 
 class SentenceAssignment(BaseModel):

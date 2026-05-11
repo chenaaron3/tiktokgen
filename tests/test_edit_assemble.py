@@ -12,9 +12,9 @@ def _analysis() -> VlmAnalysis:
         shotId="m1",
         startSec=0.0,
         endSec=4.0,
-        vlmTag="utensil_lift",
+        vlmTag="the_interaction",
         confidenceScore=0.9,
-        keyInstantSec=2.0,
+        keyInstantStartSec=2.0,
         reasoning="lift",
     )
     clip = Clip(
@@ -87,7 +87,7 @@ def test_happy_assemble_matches_fixture_pipeline():
         endSec=7.5,
         vlmTag="texture_macro",
         confidenceScore=0.85,
-        keyInstantSec=4.25,
+        keyInstantStartSec=4.25,
         reasoning="stretch",
     )
     third_shot = IdentifiedShot(
@@ -96,7 +96,7 @@ def test_happy_assemble_matches_fixture_pipeline():
         endSec=9.5,
         vlmTag="texture_macro",
         confidenceScore=0.82,
-        keyInstantSec=8.0,
+        keyInstantStartSec=8.0,
         reasoning="close-up",
     )
     analysis.clips[0].identified_shots.extend([second_shot, third_shot])
@@ -125,12 +125,15 @@ def test_happy_assemble_matches_fixture_pipeline():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hello.",
-                shots=[ShotRef(clipId="c0", shotId="m1")],
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Opens on the first beat.")],
             ),
             SentenceAssignment(
                 sentenceId="s1",
                 text="Again now.",
-                shots=[ShotRef(clipId="c0", shotId="m2"), ShotRef(clipId="c0", shotId="m3")],
+                shots=[
+                    ShotRef(clipId="c0", shotId="m2", reasoning="Introduces the next visual beat."),
+                    ShotRef(clipId="c0", shotId="m3", reasoning="Provides variation for the second beat."),
+                ],
             ),
         ],
     )
@@ -183,7 +186,13 @@ def test_assemble_rejects_nonzero_first_sentence_start():
         ]
     )
     match = ShotMatch(
-        assignments=[SentenceAssignment(sentenceId="s0", text="Hi.", shots=[ShotRef(clipId="c0", shotId="m1")])]
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hi.",
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Covers the only beat.")],
+            )
+        ]
     )
     with pytest.raises(ValueError, match="first sentence must start at 0"):
         build_resolved_sentences(
@@ -202,7 +211,7 @@ def test_assemble_rejects_sentence_gap():
         endSec=8.0,
         vlmTag="texture_macro",
         confidenceScore=0.8,
-        keyInstantSec=4.5,
+        keyInstantStartSec=4.5,
         reasoning="alt",
     )
     analysis.clips[0].identified_shots.append(second_shot)
@@ -226,8 +235,16 @@ def test_assemble_rejects_sentence_gap():
     )
     match = ShotMatch(
         assignments=[
-            SentenceAssignment(sentenceId="s0", text="One.", shots=[ShotRef(clipId="c0", shotId="m1")]),
-            SentenceAssignment(sentenceId="s1", text="Two.", shots=[ShotRef(clipId="c0", shotId="m2")]),
+            SentenceAssignment(
+                sentenceId="s0",
+                text="One.",
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Represents the first sentence.")],
+            ),
+            SentenceAssignment(
+                sentenceId="s1",
+                text="Two.",
+                shots=[ShotRef(clipId="c0", shotId="m2", reasoning="Represents the second sentence.")],
+            ),
         ]
     )
     with pytest.raises(ValueError, match="sentence ledger must be contiguous"):
@@ -253,7 +270,13 @@ def test_assemble_requires_last_sentence_end_to_match_audio():
         ]
     )
     match = ShotMatch(
-        assignments=[SentenceAssignment(sentenceId="s0", text="Hi.", shots=[ShotRef(clipId="c0", shotId="m1")])]
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hi.",
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Matches the short greeting.")],
+            )
+        ]
     )
     with pytest.raises(ValueError, match="last sentence must end at audio duration"):
         build_resolved_sentences(
@@ -269,9 +292,9 @@ def test_source_window_shifts_left_when_key_near_right_edge():
         shotId="m1",
         startSec=5.0,
         endSec=7.0,
-        vlmTag="utensil_lift",
+        vlmTag="the_interaction",
         confidenceScore=0.9,
-        keyInstantSec=6.8,
+        keyInstantStartSec=6.8,
         reasoning="lift",
     )
     clip = Clip(
@@ -308,7 +331,7 @@ def test_source_window_shifts_left_when_key_near_right_edge():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Stretch.",
-                shots=[ShotRef(clipId="c0", shotId="m1")],
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Keeps focus on the key instant.")],
             )
         ]
     )

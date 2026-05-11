@@ -20,7 +20,7 @@ class PathUtil:
         return self._run_dir
 
     def vlm_cache_dir(self) -> Path:
-        """Parent of the run directory (e.g. ``cache/``), used for UUID siblings when output is explicit."""
+        """Parent of the run directory (e.g. ``cache/``), used for sibling runs when output is explicit."""
         return self._run_dir.parent
 
     def vlm_output_dir(self) -> Path:

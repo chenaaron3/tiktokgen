@@ -7,7 +7,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from twelvelabs import TwelveLabs
 from twelvelabs.types import AsyncResponseFormat, VideoContext_AssetId
@@ -35,17 +35,12 @@ SEGMENT_DEFINITION = {
             "enum": list(RESTAURANT_VLM_TAGS),
         },
         {
-            "name": "key_instant_sec",
+            "name": "key_instant_start_sec",
             "type": "number",
             "description": (
                 "Seconds on master timeline with start_time<=value<=end_time. "
-                "Decisive instant for the tag; for not_suitable use clearest or midpoint frame in the span."
+                "Key moment within the shot with the best framing and timing for the tag."
             ),
-        },
-        {
-            "name": "confidence_score",
-            "type": "number",
-            "description": "0.0-1.0 confidence for the tag.",
         },
         {
             "name": "reasoning",
@@ -99,33 +94,32 @@ def normalize_confidence(value: Any) -> float:
     return max(0.0, min(1.0, score))
 
 
-def parse_required_key_instant(
+def parse_required_key_instant_sec(
     metadata: dict[str, Any],
     *,
     start_sec: float,
     end_sec: float,
     row_index: int,
 ) -> float:
-    """Metadata key_instant_sec is required and must fall within [start_sec, end_sec]."""
-    raw = metadata.get("key_instant_sec")
-    if raw is None:
+    """Parse required key instant and clamp into [start_sec, end_sec]."""
+    raw_start = metadata.get("key_instant_start_sec")
+    if raw_start is None:
         raise RuntimeError(
-            f"identified_shots[{row_index}]: missing required metadata field key_instant_sec"
+            f"identified_shots[{row_index}]: missing required metadata field key_instant_start_sec"
         )
+
     try:
-        key = float(raw)
+        key_start = float(raw_start)
     except (TypeError, ValueError) as exc:
         raise RuntimeError(
-            f"identified_shots[{row_index}]: key_instant_sec is not a number: {raw!r}"
+            f"identified_shots[{row_index}]: key_instant_start_sec is not a number: {raw_start!r}"
         ) from exc
 
     low, high = (start_sec, end_sec) if end_sec >= start_sec else (end_sec, start_sec)
 
-    if key < low or key > high:
-        raise RuntimeError(
-            f"identified_shots[{row_index}]: key_instant_sec {key} must lie within [{low}, {high}]"
-        )
-    return key
+    # Be lenient with provider boundary jitter: clamp to segment bounds.
+    key_start = min(max(key_start, low), high)
+    return key_start
 
 
 def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]:
@@ -146,18 +140,20 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
         start_sec, end_sec = (
             (start_raw, end_raw) if end_raw >= start_raw else (end_raw, start_raw)
         )
-        key_instant = parse_required_key_instant(
+        key_instant_start = parse_required_key_instant_sec(
             metadata, start_sec=start_sec, end_sec=end_sec, row_index=index
         )
         normalized.append(
-            IdentifiedShot(
-                shotId=f"shot-{index:03d}",
-                startSec=start_sec,
-                endSec=end_sec,
-                vlmTag=tag,
-                confidenceScore=normalize_confidence(metadata.get("confidence_score")),
-                keyInstantSec=key_instant,
-                reasoning=str(metadata.get("reasoning", "")).strip(),
+            IdentifiedShot.model_validate(
+                {
+                    "shotId": f"shot-{index:03d}",
+                    "startSec": start_sec,
+                    "endSec": end_sec,
+                    "vlmTag": tag,
+                    "confidenceScore": normalize_confidence(metadata.get("confidence_score")),
+                    "keyInstantStartSec": key_instant_start,
+                    "reasoning": str(metadata.get("reasoning", "")).strip(),
+                }
             )
         )
 
@@ -218,7 +214,7 @@ class TwelveLabsVideoAnalyzer:
             max_segment_duration=self.max_segment_duration,
             response_format=AsyncResponseFormat(
                 type="segment_definitions",
-                segment_definitions=[SEGMENT_DEFINITION],
+                segment_definitions=cast(list[Any], [SEGMENT_DEFINITION]),
             ),
         )
         print(f"[{logical_source.name}] Created TwelveLabs analysis task: {task.task_id}")
@@ -267,7 +263,10 @@ class TwelveLabsVideoAnalyzer:
                 return existing_asset
             if status != "failed":
                 print(f"[{label}] Waiting for existing TwelveLabs asset: {existing_asset.id}")
-                return self._wait_for_asset(existing_asset.id)
+                existing_id = getattr(existing_asset, "id", None)
+                if not existing_id:
+                    raise RuntimeError(f"[{label}] Existing TwelveLabs asset is missing id")
+                return self._wait_for_asset(str(existing_id))
 
         print(f"[{label}] Uploading video as {filename}")
         with video_path.open("rb") as video_file:
@@ -275,7 +274,10 @@ class TwelveLabsVideoAnalyzer:
         print(f"[{label}] Created TwelveLabs asset: {asset.id}")
 
         print(f"[{label}] Waiting for asset processing")
-        return self._wait_for_asset(asset.id)
+        created_id = getattr(asset, "id", None)
+        if not created_id:
+            raise RuntimeError(f"[{label}] Created TwelveLabs asset is missing id")
+        return self._wait_for_asset(str(created_id))
 
     def _find_asset(self, filename: str) -> Any | None:
         pager = self.client.assets.list(filename=filename, asset_types="video", page_limit=50)

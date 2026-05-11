@@ -32,11 +32,11 @@ class IdentifiedShot(BaseModel):
     end_sec: float = Field(alias="endSec")
     vlm_tag: str = Field(alias="vlmTag")
     confidence_score: float = Field(alias="confidenceScore", ge=0.0, le=1.0)
-    key_instant_sec: float = Field(
-        alias="keyInstantSec",
+    key_instant_start_sec: float = Field(
+        alias="keyInstantStartSec",
         description=(
-            "Single critical instant on the source timeline for this labeled action "
-            "(e.g. first utensil–food contact for utensil_lift); must lie in [startSec, endSec]."
+            "Key moment on the source timeline for this labeled action with the best framing and timing; "
+            "must lie in [startSec, endSec]."
         ),
     )
     reasoning: str
@@ -52,10 +52,13 @@ class IdentifiedShot(BaseModel):
     def validate_key_within_shot_bounds(self) -> IdentifiedShot:
         if self.end_sec < self.start_sec:
             raise ValueError("endSec must be greater than or equal to startSec")
-        if self.key_instant_sec < self.start_sec or self.key_instant_sec > self.end_sec:
+        if (
+            self.key_instant_start_sec < self.start_sec
+            or self.key_instant_start_sec > self.end_sec
+        ):
             raise ValueError(
-                f"keyInstantSec ({self.key_instant_sec}) must satisfy "
-                f"startSec ({self.start_sec}) <= keyInstantSec <= endSec ({self.end_sec})"
+                f"keyInstantStartSec ({self.key_instant_start_sec}) must satisfy "
+                f"startSec ({self.start_sec}) <= keyInstantStartSec <= endSec ({self.end_sec})"
             )
         return self
 

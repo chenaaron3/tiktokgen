@@ -38,10 +38,6 @@ function activeShotForTime(shots: IdentifiedShot[], t: number): IdentifiedShot |
   return null
 }
 
-function spanCenter(start: number, end: number): number {
-  return (end - start) / 2
-}
-
 export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -161,7 +157,10 @@ export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
                 }
               />
               <MetadataRow label="Range" value={`${activeShot.startSec ?? "—"} – ${activeShot.endSec ?? "—"} s`} />
-              <MetadataRow label="Key instant" value={`${activeShot.keyInstantSec ?? "—"} s`} />
+              <MetadataRow
+                label="Key moment"
+                value={`${activeShot.keyInstantStartSec ?? "—"} s`}
+              />
               <p className="leading-relaxed text-zinc-400">
                 <span className="font-medium text-zinc-200">Reasoning:</span> {activeShot.reasoning ?? "—"}
               </p>
@@ -264,25 +263,22 @@ export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
             const tag = s.vlmTag ?? "?"
             const st = Math.max(0, s.startSec ?? 0)
             const en = Math.min(timelineDuration, s.endSec ?? 0)
-            const fallbackKey = st + spanCenter(st, en)
-            let keyInstant = typeof s.keyInstantSec === "number" ? s.keyInstantSec : fallbackKey
-            keyInstant = Math.min(en, Math.max(st, keyInstant))
-            const keyGlobalPct = timelineDuration > 0 ? (keyInstant / timelineDuration) * 100 : 0
+            const fallbackMoment = st + (en - st) / 2
+            const rawMoment =
+              typeof s.keyInstantStartSec === "number" ? s.keyInstantStartSec : fallbackMoment
+            const keyMoment = Math.min(en, Math.max(st, rawMoment))
+            const keyPct = timelineDuration > 0 ? (keyMoment / timelineDuration) * 100 : 0
             return (
-              <div
-                key={`key-${idx}-${tag}`}
-                title={`${tag} • key ${keyInstant.toFixed(2)}s`}
-                className="pointer-events-none absolute top-0 bottom-0 z-[32] -translate-x-1/2"
-                style={{ left: `${keyGlobalPct}%` }}
-              >
+              <div key={`key-${idx}-${tag}`} className="pointer-events-none absolute inset-0 z-[32]">
                 <div
                   aria-hidden
-                  className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-amber-300/95 shadow-[1px_0_0_rgb(24_24_27_/_35%)]"
-                />
-                <div
-                  aria-hidden
-                  className="absolute left-1/2 top-1/2 z-[1] size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-zinc-950 bg-amber-300 shadow-sm"
-                />
+                  title={`${tag} • key moment ${keyMoment.toFixed(2)}s`}
+                  className="absolute top-0 bottom-0 -translate-x-1/2"
+                  style={{ left: `${keyPct}%` }}
+                >
+                  <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-amber-300/95 shadow-[1px_0_0_rgb(24_24_27_/_35%)]" />
+                  <div className="absolute left-1/2 top-1/2 z-[1] size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-zinc-950 bg-amber-300 shadow-sm" />
+                </div>
               </div>
             )
           })}
