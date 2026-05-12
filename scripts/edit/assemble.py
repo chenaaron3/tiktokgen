@@ -42,11 +42,11 @@ def resolve_source_window(
     shot: IdentifiedShot,
     clip: Clip,
     timeline_duration_sec: float,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     """Build a fixed-duration source window anchored at ``key_instant_start_sec``.
 
-    If the right edge overflows shot/clip bounds, shift the whole window left to preserve
-    duration while keeping playbackRate exactly 1.
+    If requested duration exceeds available clip duration, use the maximum in-clip window
+    and return a playback_rate that callers can use to fill the target timeline duration.
     """
     shot_start = shot.start_sec
     shot_end = shot.end_sec
@@ -55,35 +55,33 @@ def resolve_source_window(
     td = float(timeline_duration_sec)
     if td <= 0:
         raise ValueError("timeline_duration_sec must be positive")
-    shot_lo = max(0.0, shot_start)
+    clip_lo = 0.0
     clip_hi = float(clip.duration_sec) if clip.duration_sec is not None else float("inf")
-    hi = min(shot_end, clip_hi)
-    if hi <= shot_lo:
+    if clip_hi <= clip_lo:
         raise ValueError(f"cannot form window for clip {clip.id} shot {shot.shot_id}")
-    max_duration = hi - shot_lo
+    max_duration = clip_hi - clip_lo
     if td > max_duration + EPSILON:
-        raise ValueError(
-            f"cannot allocate {td:.3f}s in clip {clip.id} shot {shot.shot_id} "
-            f"(available {max_duration:.3f}s)"
-        )
+        td = max_duration
 
     s = key_instant_start_sec
     e = key_instant_start_sec + td
 
-    if e > hi:
-        shift = e - hi
+    if e > clip_hi:
+        shift = e - clip_hi
         s -= shift
         e -= shift
-    if s < shot_lo:
-        shift = shot_lo - s
+    if s < clip_lo:
+        shift = clip_lo - s
         s += shift
         e += shift
 
-    if s < shot_lo - EPSILON or e > hi + EPSILON:
+    if s < clip_lo - EPSILON or e > clip_hi + EPSILON:
         raise ValueError(f"cannot fit source window for clip {clip.id} shot {shot.shot_id}")
-    if e - s <= 0:
+    source_duration = e - s
+    if source_duration <= 0:
         raise ValueError(f"cannot form positive window for clip {clip.id} shot {shot.shot_id}")
-    return s, e
+    playback_rate = source_duration / timeline_duration_sec
+    return s, e, playback_rate
 
 
 def _validate_sentence_ledger(
@@ -204,12 +202,25 @@ def assemble_render_plan(
             timeline_start = timeline_cursor
             timeline_end = timeline_start + allocated_shot_time
             timeline_cursor = timeline_end
-            source_start, source_end = resolve_source_window(
+            source_start, source_end, playback_rate = resolve_source_window(
                 resolved_shot.shot.key_instant_start_sec,
                 resolved_shot.shot,
                 resolved_shot.clip,
                 allocated_shot_time,
             )
+            source_duration = source_end - source_start
+            if source_duration <= 0:
+                raise ValueError(
+                    f"cannot form positive source duration for clip {resolved_shot.clip_ref} "
+                    f"shot {resolved_shot.shot_ref}"
+                )
+            if playback_rate + EPSILON < 1.0:
+                warnings.append(
+                    "short source window retimed to fill beat duration: "
+                    f"clip={resolved_shot.clip_ref} shot={resolved_shot.shot_ref} "
+                    f"source={source_duration:.3f}s timeline={allocated_shot_time:.3f}s "
+                    f"rate={playback_rate:.3f}"
+                )
 
             pair = (resolved_shot.clip_ref, resolved_shot.shot_ref)
             if prev_pair is not None and pair == prev_pair:
@@ -230,7 +241,7 @@ def assemble_render_plan(
                     sourceEndSec=source_end,
                     timelineStartSec=timeline_start,
                     timelineEndSec=timeline_end,
-                    playbackRate=1.0,
+                    playbackRate=playback_rate,
                 )
             )
 

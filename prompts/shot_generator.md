@@ -58,6 +58,12 @@ Use this `_planning` template exactly (concise bullets, no extra sections):
 - Track which `clipId`s are now consumed after each sentence.
 - Do not consume clips during the hook sentence.
 - Consumed set is cumulative across post-hook sentences (monotonic union): once added, never remove.
+- For each post-hook sentence, explicitly show:
+  - `picks_this_sentence = {...}`
+  - `consumed_before = {...}`
+  - `overlap = picks_this_sentence ∩ consumed_before`
+  - If `overlap` is non-empty, mark FAIL and replace conflicting clips before finalizing assignments.
+  - `consumed_after = consumed_before ∪ picks_this_sentence`
 
 3. Rule Checks
 
@@ -71,6 +77,10 @@ Use this `_planning` template exactly (concise bullets, no extra sections):
 - Exact beat count per sentence: PASS/FAIL
 - Every `(clipId, shotId)` exists in `vlmShots`: PASS/FAIL
 - Every shot has one-sentence `reasoning`: PASS/FAIL
+- `reused_post_hook_clips`: explicit list of violating `clipId`s (must be `[]`)
+- `non_contiguous_reentries`: explicit list (must be `[]`)
+- `non_increasing_runs`: explicit list (must be `[]`)
+- If any of the three lists is non-empty, revise picks first; do not mark final validation PASS.
 
 Example `_planning` format:
 
@@ -83,9 +93,9 @@ Example `_planning` format:
 
 2) Clip Consumption (post-hook only)
 - s0 is hook: consumed clips unchanged -> {}
-- after s1: consumed clips -> {C1, D1}
-- after s2: consumed clips -> {C1, D1, E1}
-- after s3: consumed clips -> {C1, D1, E1, H1, F1}
+- s1: picks_this_sentence={C1, D1}; consumed_before={}; overlap={}; consumed_after={C1, D1}
+- s2: picks_this_sentence={E1}; consumed_before={C1, D1}; overlap={}; consumed_after={C1, D1, E1}
+- s3: picks_this_sentence={H1, F1}; consumed_before={C1, D1, E1}; overlap={}; consumed_after={C1, D1, E1, H1, F1}
 
 3) Rule Checks
 - Contiguous runs: PASS (E1 and H1 stay adjacent within their runs)
@@ -98,6 +108,9 @@ Example `_planning` format:
 - Exact beat count per sentence: PASS
 - Every (clipId, shotId) exists in vlmShots: PASS
 - Every shot has one-sentence reasoning: PASS
+- reused_post_hook_clips: []
+- non_contiguous_reentries: []
+- non_increasing_runs: []
 ```
 
 ```

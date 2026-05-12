@@ -359,3 +359,142 @@ def test_source_window_shifts_left_when_key_near_right_edge():
     assert abs(beat.source_start_sec - 5.5) < 1e-9
     assert abs(beat.source_end_sec - 7.0) < 1e-9
     assert abs((beat.source_end_sec - beat.source_start_sec) - 1.5) < 1e-9
+
+
+def test_source_window_uses_full_clip_duration_when_shot_window_too_short():
+    shot = IdentifiedShot(
+        shotId="m1",
+        startSec=1.1,
+        endSec=2.0,
+        vlmTag="the_interaction",
+        confidenceScore=0.9,
+        keyInstantStartSec=1.2,
+        reasoning="lift",
+    )
+    clip = Clip(
+        id="c0",
+        sourcePath="/tmp/x.mov",
+        originalFilename="x.mov",
+        durationSec=3.0,
+        capturedAt=None,
+        location=None,
+        media={},
+        twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
+        summary="s",
+        identifiedShots=[shot],
+    )
+    analysis = VlmAnalysis(
+        runId="r",
+        analyzedAt="t",
+        provider=Provider(name="p", model="m", rawResponseRef=""),
+        clips=[clip],
+    )
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Stretch longer.",
+                speechStartSec=0.0,
+                speechEndSec=2.5,
+                beatCount=1,
+            )
+        ]
+    )
+    match = ShotMatch(
+        _planning="Test planning for clip-duration bounded source windows.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Stretch longer.",
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Uses available clip duration.")],
+            )
+        ],
+    )
+    resolved = build_resolved_sentences(
+        shot_match=match,
+        analysis=analysis,
+        sentence_ledger=ledger,
+        audio_duration_sec=2.5,
+    )
+    plan = assemble_render_plan(
+        resolved_sentences=resolved,
+        whisper_words=[],
+        voiceover_static_path="/tmp/voice.mp3",
+        audio_duration_sec=2.5,
+        run_id="r",
+        created_at="t",
+    )
+    beat = plan.beats[0]
+    assert beat.source_start_sec >= 0.0
+    assert beat.source_end_sec <= 3.0
+    assert abs((beat.source_end_sec - beat.source_start_sec) - 2.5) < 1e-9
+
+
+def test_short_clip_is_retimed_instead_of_raising():
+    shot = IdentifiedShot(
+        shotId="m1",
+        startSec=1.1,
+        endSec=2.0,
+        vlmTag="the_interaction",
+        confidenceScore=0.9,
+        keyInstantStartSec=1.2,
+        reasoning="lift",
+    )
+    clip = Clip(
+        id="c0",
+        sourcePath="/tmp/x.mov",
+        originalFilename="x.mov",
+        durationSec=1.898,
+        capturedAt=None,
+        location=None,
+        media={},
+        twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
+        summary="s",
+        identifiedShots=[shot],
+    )
+    analysis = VlmAnalysis(
+        runId="r",
+        analyzedAt="t",
+        provider=Provider(name="p", model="m", rawResponseRef=""),
+        clips=[clip],
+    )
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Short clip retime.",
+                speechStartSec=0.0,
+                speechEndSec=1.975,
+                beatCount=1,
+            )
+        ]
+    )
+    match = ShotMatch(
+        _planning="Test planning for short clip retiming.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Short clip retime.",
+                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Uses retime fallback.")],
+            )
+        ],
+    )
+    resolved = build_resolved_sentences(
+        shot_match=match,
+        analysis=analysis,
+        sentence_ledger=ledger,
+        audio_duration_sec=1.975,
+    )
+    plan = assemble_render_plan(
+        resolved_sentences=resolved,
+        whisper_words=[],
+        voiceover_static_path="/tmp/voice.mp3",
+        audio_duration_sec=1.975,
+        run_id="r",
+        created_at="t",
+    )
+    beat = plan.beats[0]
+    assert abs(beat.source_start_sec - 0.0) < 1e-9
+    assert abs(beat.source_end_sec - 1.898) < 1e-9
+    assert beat.playback_rate < 1.0
+    assert plan.warnings and "short source window retimed" in plan.warnings[0]
