@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ MIN_TWELVELABS_VIDEO_DURATION_SEC = 4.0
 
 # Concurrent video workers in ``run()`` (TwelveLabs API batch); fixed default for programmatic use.
 MAX_PARALLEL_VIDEO_ANALYSES = 20
+_STAGE_DIR_PATTERN = re.compile(r"^\d+_.+")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -152,11 +154,16 @@ def run(
         raise SystemExit(f"Source must be a file or directory: {source_path}")
 
     if output_dir is None:
-        resolved_output_dir = create_run_directory(cache_dir.expanduser())
-        run_id = resolved_output_dir.name
+        run_root = create_run_directory(cache_dir.expanduser())
+        resolved_output_dir = run_root / "2_vlm"
+        run_id = run_root.name
     else:
         resolved_output_dir = output_dir.expanduser()
-        run_id = resolved_output_dir.name
+        run_id = (
+            resolved_output_dir.parent.name
+            if _STAGE_DIR_PATTERN.match(resolved_output_dir.name)
+            else resolved_output_dir.name
+        )
     analysis_output = resolved_output_dir / "vlm-analysis.json"
     raw_output = resolved_output_dir / "raw-output.json"
 
@@ -169,7 +176,7 @@ def run(
         print(f"Discovered {len(videos)} video(s)")
     skipped_clips: list[dict[str, Any]] = []
 
-    max_workers = min(max(1, args.max_concurrency), 10, len(videos))
+    max_workers = min(max(1, args.max_concurrency), 20, len(videos))
     print(f"Processing with max concurrency: {max_workers}")
 
     results: list[tuple[Clip, dict[str, Any]] | None] = [None] * len(videos)

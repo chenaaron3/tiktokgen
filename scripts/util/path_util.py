@@ -25,43 +25,48 @@ class PathUtil:
 
     def vlm_output_dir(self) -> Path:
         """Directory where ``vlm-analysis.json`` for this pipeline run should be written."""
-        return self._run_dir
+        return self._stage_dir("2_vlm")
 
     def llm_observability_dir(self) -> Path:
         return self._run_dir / "llm-observability"
 
+    def _stage_dir(self, stage: str) -> Path:
+        path = self._run_dir / stage
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def script_draft_txt(self) -> Path:
-        return self._run_dir / "script.draft.txt"
+        return self._stage_dir("1_script") / "script.draft.txt"
 
     def script_txt(self) -> Path:
-        return self._run_dir / "script.txt"
+        return self._stage_dir("1_script") / "script.txt"
 
     def script_llm_observability_json(self) -> Path:
         return self.llm_observability_dir() / "script.json"
 
     def vlm_analysis_json(self) -> Path:
-        return self._run_dir / "vlm-analysis.json"
+        return self._stage_dir("2_vlm") / "vlm-analysis.json"
 
     def voiceover_mp3(self) -> Path:
-        return self._run_dir / "voiceover.mp3"
+        return self._stage_dir("3_tts") / "voiceover.mp3"
 
     def whisper_words_json(self) -> Path:
-        return self._run_dir / "whisper-words.json"
+        return self._stage_dir("4_whisper") / "whisper-words.json"
 
     def sentence_ledger_json(self) -> Path:
-        return self._run_dir / "sentence-ledger.json"
+        return self._stage_dir("5_sentence_ledger") / "sentence-ledger.json"
 
     def shot_match_json(self) -> Path:
-        return self._run_dir / "shot-match.json"
+        return self._stage_dir("6_match") / "shot-match.json"
 
     def shot_match_llm_observability_json(self) -> Path:
         return self.llm_observability_dir() / "shot-match.json"
 
     def render_plan_json(self) -> Path:
-        return self._run_dir / "render-plan.json"
+        return self._stage_dir("7_assemble") / "render-plan.json"
 
     def default_render_mp4(self) -> Path:
-        return self._run_dir / "render.mp4"
+        return self._stage_dir("8_render") / "render.mp4"
 
 
 def pick_notes_txt(project_dir: Path) -> Path | None:

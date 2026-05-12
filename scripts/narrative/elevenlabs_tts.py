@@ -40,9 +40,9 @@ class ElevenLabsTts(TextToSpeech):
         self._model_id = model_id
         self._output_format = output_format
 
-    def synthesize(self, script_text: str) -> Path:
+    def synthesize(self, script_text: str, *, use_cache: bool = True) -> Path:
         output_mp3 = self._paths.voiceover_mp3()
-        if output_mp3.is_file():
+        if use_cache and output_mp3.is_file():
             return output_mp3
 
         print("\n==> ElevenLabs TTS")

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from dotenv import load_dotenv
 from edit import LitellmShotMatchOrchestrator
@@ -17,6 +18,43 @@ from util import PathUtil, resolve_bundled_project
 from util.render import run_remotion_render
 from vlm import TwelveLabsVideoAnalysisBackend
 from vlm.media import probe_media
+
+class PipelineStep(StrEnum):
+    SCRIPT = "script"
+    VLM = "vlm"
+    TTS = "tts"
+    WHISPER = "whisper"
+    SENTENCE_LEDGER = "sentence_ledger"
+    MATCH = "match"
+    ASSEMBLE = "assemble"
+    RENDER = "render"
+
+
+_STEP_ORDER: dict[PipelineStep, int] = {
+    PipelineStep.SCRIPT: 1,
+    PipelineStep.VLM: 2,
+    PipelineStep.TTS: 3,
+    PipelineStep.WHISPER: 4,
+    PipelineStep.SENTENCE_LEDGER: 5,
+    PipelineStep.MATCH: 6,
+    PipelineStep.ASSEMBLE: 7,
+    PipelineStep.RENDER: 8,
+}
+_BREAK_STEPS: tuple[PipelineStep, ...] = (
+    PipelineStep.SCRIPT,
+    PipelineStep.VLM,
+    PipelineStep.TTS,
+    PipelineStep.MATCH,
+    PipelineStep.ASSEMBLE,
+)
+_RERUN_STEPS: tuple[PipelineStep, ...] = tuple(PipelineStep)
+
+
+def should_use_cache(*, step: PipelineStep, rerun_from: PipelineStep | None) -> bool:
+    """Return False for rerun step and all downstream steps."""
+    if rerun_from is None:
+        return True
+    return _STEP_ORDER[step] < _STEP_ORDER[rerun_from]
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,13 +98,27 @@ def parse_args() -> argparse.Namespace:
         "--break",
         dest="break_after",
         metavar="STEP",
-        choices=("script", "vlm", "tts", "match", "assemble"),
+        type=PipelineStep,
+        choices=_BREAK_STEPS,
         default=None,
         help=(
             "Exit successfully right after this pipeline step. "
             "Steps: script (after script.txt), vlm (after VLM analysis), "
             "tts (after voice synthesize only; Whisper and later skipped on this run), "
             "match (after shot-match.json), assemble (after render-plan.json; Remotion render skipped)."
+        ),
+    )
+    parser.add_argument(
+        "--rerun-from",
+        dest="rerun_from",
+        metavar="STEP",
+        type=PipelineStep,
+        choices=_RERUN_STEPS,
+        default=None,
+        help=(
+            "Bypass cache for this step and all following pipeline stages. "
+            "Example: --rerun-from match reruns shot-match, assemble, and render "
+            "while still reusing script/VLM/TTS/Whisper/ledger cache."
         ),
     )
     return parser.parse_args()
@@ -82,6 +134,10 @@ def main() -> int:
     )
     run_dir.mkdir(parents=True, exist_ok=True)
     paths = PathUtil(run_dir)
+    rerun_from: PipelineStep | None = args.rerun_from
+    break_after: PipelineStep | None = args.break_after
+    if rerun_from is not None:
+        print(f"Bypassing cache from step '{rerun_from.value}' onward.")
 
     footage_root, notes_path_resolved = resolve_bundled_project(args.source)
 
@@ -89,41 +145,58 @@ def main() -> int:
     print(f"Notes file: {notes_path_resolved}")
 
     # Create script from notes
-    script_text = LitellmScriptGenerator(paths=paths).generate(notes_path_resolved.read_text())
+    script_text = LitellmScriptGenerator(paths=paths).generate(
+        notes_path_resolved.read_text(),
+        use_cache=should_use_cache(step=PipelineStep.SCRIPT, rerun_from=rerun_from),
+    )
 
-    if args.break_after == "script":
+    if break_after == PipelineStep.SCRIPT:
         print("Stopping after script (--break script).")
         return 0
 
     # Analyze footage
-    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(footage_root)
+    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(
+        footage_root,
+        use_cache=should_use_cache(step=PipelineStep.VLM, rerun_from=rerun_from),
+    )
 
-    if args.break_after == "vlm":
+    if break_after == PipelineStep.VLM:
         print("Stopping after VLM (--break vlm).")
         return 0
 
     # Generate voiceover
-    voice_path = ElevenLabsTts(paths=paths).synthesize(script_text)
+    voice_path = ElevenLabsTts(paths=paths).synthesize(
+        script_text,
+        use_cache=should_use_cache(step=PipelineStep.TTS, rerun_from=rerun_from),
+    )
     voice_duration = probe_media(voice_path).get("durationSec")
     if voice_duration is None:
         raise RuntimeError(f"Unable to determine voiceover duration for {voice_path}")
 
-    if args.break_after == "tts":
+    if break_after == PipelineStep.TTS:
         print("Stopping after TTS (--break tts).")
         return 0
 
     # Transcribe voiceover
-    words = FasterWhisperWordTranscriber(paths=paths).transcribe_words()
+    words = FasterWhisperWordTranscriber(paths=paths).transcribe_words(
+        use_cache=should_use_cache(step=PipelineStep.WHISPER, rerun_from=rerun_from),
+    )
     # Build sentences
-    ledger = build_sentence_ledger(words, float(voice_duration), paths)
+    ledger = build_sentence_ledger(
+        words,
+        float(voice_duration),
+        paths,
+        use_cache=should_use_cache(step=PipelineStep.SENTENCE_LEDGER, rerun_from=rerun_from),
+    )
 
     # Generate shot match
     shot_match = LitellmShotMatchOrchestrator(paths).generate_shot_match(
         analysis=analysis,
         ledger=ledger,
+        use_cache=should_use_cache(step=PipelineStep.MATCH, rerun_from=rerun_from),
     )
 
-    if args.break_after == "match":
+    if break_after == PipelineStep.MATCH:
         print("Stopping after shot match (--break match).")
         return 0
 
@@ -145,7 +218,7 @@ def main() -> int:
         paths=paths,
     )
 
-    if args.break_after == "assemble":
+    if break_after == PipelineStep.ASSEMBLE:
         print("Stopping after assemble (--break assemble); skipping Remotion render.")
         return 0
 

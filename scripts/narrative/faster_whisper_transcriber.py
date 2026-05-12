@@ -19,9 +19,9 @@ class FasterWhisperWordTranscriber(WordTranscriber):
     def __init__(self, paths: PathUtil) -> None:
         self._paths = paths
 
-    def transcribe_words(self) -> list[WordToken]:
+    def transcribe_words(self, *, use_cache: bool = True) -> list[WordToken]:
         whisper_path = self._paths.whisper_words_json()
-        if whisper_path.is_file():
+        if use_cache and whisper_path.is_file():
             raw = json.loads(whisper_path.read_text())
             return [WordToken.model_validate(w) for w in raw.get("words", [])]
 

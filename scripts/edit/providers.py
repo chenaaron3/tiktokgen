@@ -16,4 +16,5 @@ class ShotMatchOrchestrator(Protocol):
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
+        use_cache: bool = True,
     ) -> ShotMatch: ...

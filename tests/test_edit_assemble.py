@@ -62,6 +62,7 @@ def test_assemble_requires_matching_shot_count():
         ]
     )
     bad = ShotMatch(
+        _planning="Test planning for mismatched shot count.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
@@ -121,6 +122,7 @@ def test_happy_assemble_matches_fixture_pipeline():
     )
 
     shot_match = ShotMatch(
+        _planning="Test planning for happy path assembly.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
@@ -186,6 +188,7 @@ def test_assemble_rejects_nonzero_first_sentence_start():
         ]
     )
     match = ShotMatch(
+        _planning="Test planning for first sentence start validation.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
@@ -234,6 +237,7 @@ def test_assemble_rejects_sentence_gap():
         ]
     )
     match = ShotMatch(
+        _planning="Test planning for sentence gap validation.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
@@ -270,6 +274,7 @@ def test_assemble_requires_last_sentence_end_to_match_audio():
         ]
     )
     match = ShotMatch(
+        _planning="Test planning for last sentence end validation.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
@@ -327,6 +332,7 @@ def test_source_window_shifts_left_when_key_near_right_edge():
         ]
     )
     match = ShotMatch(
+        _planning="Test planning for source window edge handling.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",

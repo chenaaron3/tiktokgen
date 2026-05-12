@@ -47,10 +47,10 @@ class LitellmScriptGenerator(ScriptGenerator):
         self._obs_path.parent.mkdir(parents=True, exist_ok=True)
         install_local_observability_logger()
 
-    def generate(self, notes: str) -> str:
+    def generate(self, notes: str, *, use_cache: bool = True) -> str:
         notes = notes.strip()
         approved = self._paths.script_txt()
-        if approved.is_file():
+        if use_cache and approved.is_file():
             return approved.read_text()
 
         if not notes:

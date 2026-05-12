@@ -13,6 +13,7 @@ PIPELINE_SAMPLE_WORDS: list[WordToken] = [
 
 # Example shot-match pairing one sentence ↔ one `(clipId, shotId)`
 PIPELINE_SAMPLE_SHOT_MATCH = ShotMatch(
+    _planning="Fixture planning: one sentence uses one shot.",
     assignments=[
         SentenceAssignment(
             sentenceId="s0",

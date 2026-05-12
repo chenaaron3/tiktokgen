@@ -15,11 +15,18 @@ def build_sentence_ledger(
     words: list[WordToken],
     audio_duration_sec: float,
     paths: PathUtil | None = None,
+    *,
+    use_cache: bool = True,
 ) -> SentenceLedger:
     """Group words into sentences and normalize to span ``[0, audio_duration_sec]``.
 
     When ``paths`` is set, writes ``sentence-ledger.json`` under the run directory.
     """
+    if paths is not None and use_cache:
+        ledger_path = paths.sentence_ledger_json()
+        if ledger_path.is_file():
+            return SentenceLedger.model_validate(json.loads(ledger_path.read_text()))
+
     if audio_duration_sec <= 0:
         raise ValueError("audio_duration_sec must be positive")
     if not words:

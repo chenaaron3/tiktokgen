@@ -28,6 +28,7 @@ class ShotMatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    planning: str = Field(alias="_planning")
     assignments: list[SentenceAssignment]
 
     @model_validator(mode="after")

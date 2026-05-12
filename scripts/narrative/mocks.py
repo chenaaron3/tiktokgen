@@ -13,7 +13,7 @@ class StaticScriptGenerator(ScriptGenerator):
     def __init__(self, script: str) -> None:
         self._script = script
 
-    def generate(self, notes: str) -> str:
+    def generate(self, notes: str, *, use_cache: bool = True) -> str:
         return self._script
 
 
@@ -23,7 +23,7 @@ class StaticTts(TextToSpeech):
     def __init__(self, paths: PathUtil) -> None:
         self._paths = paths
 
-    def synthesize(self, script_text: str) -> Path:
+    def synthesize(self, script_text: str, *, use_cache: bool = True) -> Path:
         return self._paths.voiceover_mp3()
 
 
@@ -33,5 +33,5 @@ class StaticWordTranscriber(WordTranscriber):
     def __init__(self, words: list[WordToken]) -> None:
         self._words = words
 
-    def transcribe_words(self) -> list[WordToken]:
+    def transcribe_words(self, *, use_cache: bool = True) -> list[WordToken]:
         return [w.model_copy(deep=True) for w in self._words]

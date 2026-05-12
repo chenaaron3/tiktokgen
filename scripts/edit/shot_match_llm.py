@@ -54,9 +54,10 @@ class LitellmShotMatchOrchestrator:
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
+        use_cache: bool = True,
     ) -> ShotMatch:
         shot_path = self._paths.shot_match_json()
-        if shot_path.is_file():
+        if use_cache and shot_path.is_file():
             print(f"\n==> shot-match (cached: {shot_path})")
             data = json.loads(shot_path.read_text())
             return ShotMatch.model_validate(data)
@@ -119,5 +120,6 @@ class StaticShotMatchOrchestrator:
         *,
         analysis: VlmAnalysis,
         ledger: SentenceLedger,
+        use_cache: bool = True,
     ) -> ShotMatch:
         return self._fixed.model_copy(deep=True)

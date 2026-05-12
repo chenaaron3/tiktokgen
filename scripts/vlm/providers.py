@@ -13,7 +13,7 @@ from .schema import VlmAnalysis
 
 @runtime_checkable
 class VideoAnalysisBackend(Protocol):
-    def analyze(self, source: Path) -> VlmAnalysis:
+    def analyze(self, source: Path, *, use_cache: bool = True) -> VlmAnalysis:
         """Load cached ``vlm-analysis.json`` under the run paths, or analyze ``source`` and return it."""
         ...
 
@@ -24,9 +24,9 @@ class TwelveLabsVideoAnalysisBackend:
     def __init__(self, paths: PathUtil) -> None:
         self._paths = paths
 
-    def analyze(self, source: Path) -> VlmAnalysis:
+    def analyze(self, source: Path, *, use_cache: bool = True) -> VlmAnalysis:
         out = self._paths.vlm_analysis_json()
-        if out.is_file():
+        if use_cache and out.is_file():
             return VlmAnalysis.model_validate(json.loads(out.read_text()))
 
         print("\n==> VLM analyze")

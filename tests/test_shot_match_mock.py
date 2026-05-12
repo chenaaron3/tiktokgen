@@ -51,6 +51,7 @@ def test_static_shot_match_orchestrator():
     )
 
     fake = ShotMatch(
+        _planning="Static mock planning for one sentence.",
         assignments=[
             SentenceAssignment(
                 sentenceId="s0",
