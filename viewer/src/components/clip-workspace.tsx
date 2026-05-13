@@ -150,12 +150,7 @@ export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
           {activeShot ? (
             <div className="mt-2 space-y-2 text-xs">
               <MetadataRow label="Tag" value={activeShot.vlmTag ?? "—"} />
-              <MetadataRow
-                label="Confidence"
-                value={
-                  typeof activeShot.confidenceScore === "number" ? activeShot.confidenceScore.toFixed(3) : "—"
-                }
-              />
+              <MetadataRow label="Dish" value={activeShot.dishName ?? "—"} />
               <MetadataRow label="Range" value={`${activeShot.startSec ?? "—"} – ${activeShot.endSec ?? "—"} s`} />
               <MetadataRow
                 label="Key moment"

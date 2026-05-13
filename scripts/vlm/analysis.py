@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from project_inputs import create_run_directory
 from .media import discover_videos, extend_video_below_minimum_twelvelabs_duration, probe_media
+from .notes import ParsedReviewNotes
 from .schema import Clip, Provider, VlmAnalysis
 from .twelvelabs import (
     DEFAULT_ANALYSIS_MODEL_NAME,
@@ -116,6 +117,7 @@ def analyze_video_worker(
             upload_path,
             clip_source_path=original,
             clip_media=media,
+            additional_context=args.additional_context,
         )
     finally:
         if unlink_temp is not None:
@@ -130,6 +132,7 @@ def run(
     min_segment_duration: float = MIN_SEGMENT_DURATION_SEC,
     max_segment_duration: float = MAX_SEGMENT_DURATION_SEC,
     max_concurrency: int = MAX_PARALLEL_VIDEO_ANALYSES,
+    additional_context: ParsedReviewNotes | None = None,
 ) -> Path:
     """Analyze videos and return the run output directory."""
     load_dotenv(PROJECT_ROOT / ".env")
@@ -140,6 +143,7 @@ def run(
         max_segment_duration=max_segment_duration,
         max_concurrency=max_concurrency,
         min_twelvelabs_upload_sec=MIN_TWELVELABS_VIDEO_DURATION_SEC,
+        additional_context=additional_context,
     )
 
     source_path = source.expanduser().resolve()
@@ -192,6 +196,11 @@ def run(
                 results[index] = future.result()
                 print(f"[{video_path.name}] Completed ({index + 1}/{len(videos)})")
             except Exception as error:
+                print(
+                    f"[{video_path.name}] Underlying analyze error: "
+                    f"{type(error).__name__}: {error}",
+                    file=sys.stderr,
+                )
                 raise RuntimeError(f"Failed to analyze {video_path}") from error
 
     clips: list[Clip] = []

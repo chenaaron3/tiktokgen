@@ -5,8 +5,8 @@ export interface IdentifiedShot {
   startSec?: number
   endSec?: number
   vlmTag?: string
-  confidenceScore?: number
   keyInstantStartSec?: number
+  dishName?: string | null
   reasoning?: string
 }
 

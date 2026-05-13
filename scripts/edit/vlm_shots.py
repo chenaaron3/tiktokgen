@@ -12,13 +12,13 @@ def build_vlm_shots_for_prompt(analysis: VlmAnalysis) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for clip in analysis.clips:
         for shot in clip.identified_shots:
-            rows.append(
-                {
-                    "clipId": clip.id,
-                    "shotId": shot.shot_id,
-                    "vlmTag": shot.vlm_tag,
-                    "confidenceScore": shot.confidence_score,
-                    "reasoning": shot.reasoning,
-                }
-            )
+            row = {
+                "clipId": clip.id,
+                "shotId": shot.shot_id,
+                "vlmTag": shot.vlm_tag,
+                "reasoning": shot.reasoning,
+            }
+            if shot.dish_name:
+                row["dishName"] = shot.dish_name
+            rows.append(row)
     return rows

@@ -1,7 +1,7 @@
 /**
  * Dev-only middleware: lists cache runs and streams media under the repo root.
  */
-import fs from "node:fs"
+import fs, { globSync } from "node:fs"
 import fsPromises from "node:fs/promises"
 import type http from "node:http"
 import path from "node:path"
@@ -71,6 +71,18 @@ function sendText(res: http.ServerResponse, status: number, message: string) {
   res.end(message)
 }
 
+/** Under ``runDir``, first ``vlm-analysis.json`` from ``globSync`` (order is not guaranteed). */
+function findVlmAnalysisPath(runDir: string): string | null {
+  let matches: string[]
+  try {
+    matches = globSync("**/vlm-analysis.json", { cwd: runDir })
+  } catch {
+    return null
+  }
+  if (matches.length === 0) return null
+  return path.join(runDir, matches[0])
+}
+
 export function createCacheApiMiddleware(repoRootAbs: string): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = req.url
@@ -95,8 +107,8 @@ export function createCacheApiMiddleware(repoRootAbs: string): Connect.NextHandl
         const runs: Array<{ runId: string; analyzedAt: string | null; clipCount: number }> = []
         for (const dirent of entries) {
           if (!dirent.isDirectory()) continue
-          const analysisPath = path.join(cacheDir, dirent.name, "vlm-analysis.json")
-          if (!fs.existsSync(analysisPath)) continue
+          const analysisPath = findVlmAnalysisPath(path.join(cacheDir, dirent.name))
+          if (!analysisPath) continue
           const meta = await readJson(analysisPath)
           if (!meta) continue
           runs.push({
@@ -118,8 +130,9 @@ export function createCacheApiMiddleware(repoRootAbs: string): Connect.NextHandl
         sendText(res, 400, "bad run id")
         return
       }
-      const analysisPath = path.resolve(repoRootAbs, "cache", runId, "vlm-analysis.json")
-      const resolved = resolveUnderRepoRoot(repoRootAbs, analysisPath)
+      const runDir = path.resolve(repoRootAbs, "cache", runId)
+      const analysisPath = findVlmAnalysisPath(runDir)
+      const resolved = analysisPath ? resolveUnderRepoRoot(repoRootAbs, analysisPath) : null
       if (!resolved || !fs.existsSync(resolved)) {
         sendText(res, 404, "analysis not found")
         return

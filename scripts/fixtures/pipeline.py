@@ -22,6 +22,7 @@ PIPELINE_SAMPLE_SHOT_MATCH = ShotMatch(
                 ShotRef(
                     clipId="fixture-clip-id",
                     shotId="fixture-shot-id",
+                    beatSpan=1,
                     reasoning="Shows the bite to support the narration.",
                 )
             ],

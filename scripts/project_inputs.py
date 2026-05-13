@@ -1,4 +1,4 @@
-"""Repo-root path resolution, run directory layout, bundled footage + ``notes.txt``."""
+"""Repo-root path resolution, run directory layout, bundled footage + ``notes.yaml``."""
 
 from __future__ import annotations
 

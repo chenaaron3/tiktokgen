@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ from twelvelabs import TwelveLabs
 from twelvelabs.types import AsyncResponseFormat, VideoContext_AssetId
 
 from .media import probe_media
+from .notes import ParsedReviewNotes
 from .restaurant_tags import RESTAURANT_SEGMENT_DESCRIPTION, RESTAURANT_VLM_TAGS
 from .schema import Clip, IdentifiedShot, TwelveLabsClipRef
 
@@ -23,8 +25,7 @@ MAX_SEGMENT_DURATION_SEC = 4.0
 
 HASH_CHUNK_BYTES = 4 * 1024 * 1024
 POLL_INTERVAL_SEC = 5.0
-
-SEGMENT_DEFINITION = {
+SEGMENT_DEFINITION: dict[str, Any] = {
     "id": "identified_shots",
     "description": RESTAURANT_SEGMENT_DESCRIPTION,
     "fields": [
@@ -47,8 +48,49 @@ SEGMENT_DEFINITION = {
             "type": "string",
             "description": "One short sentence with visual evidence for the tag.",
         },
+        {
+            "name": "dish_name",
+            "type": "string",
+            "description": (
+                "Optional dish name only when highly confident and only for food shots tagged "
+                "the_preparation, the_interaction, or the_reaction. Use empty string when unknown."
+            ),
+        },
     ],
 }
+
+
+def segment_definitions_with_extra_context(additional_context: ParsedReviewNotes | None) -> list[Any]:
+    """
+    Embed parsed dish context in the segment definition description.
+    """
+    merged = cast(dict[str, Any], copy.deepcopy(SEGMENT_DEFINITION))
+    dish_summaries: list[str] = []
+    dish_names: list[str] = []
+    seen_names: set[str] = set()
+    if additional_context is not None:
+        for dish in additional_context.dishes:
+            name = dish.name
+            description = dish.description
+            if name.casefold() not in seen_names:
+                seen_names.add(name.casefold())
+                dish_names.append(name)
+            dish_summaries.append(f"- {name}: {description}")
+
+    if dish_summaries:
+        merged["description"] = (
+            "Dish context from reviewer notes (name + description only).\n\n"
+            + "\n".join(dish_summaries)
+            + "\n\n---\n\n"
+            + str(merged.get("description", "")).strip()
+        )
+    if dish_names:
+        for field in merged.get("fields", []):
+            if not isinstance(field, dict) or field.get("name") != "dish_name":
+                continue
+            field["enum"] = ["", *dish_names]
+            break
+    return [merged]
 
 
 def video_asset_key(video_path: Path, *, chunk_bytes: int = HASH_CHUNK_BYTES) -> str:
@@ -84,14 +126,6 @@ def require_api_key() -> str:
     if not api_key:
         raise RuntimeError("Set TWELVELABS_API_KEY before running TwelveLabs analysis.")
     return api_key
-
-
-def normalize_confidence(value: Any) -> float:
-    try:
-        score = float(value)
-    except (TypeError, ValueError):
-        return 0.5
-    return max(0.0, min(1.0, score))
 
 
 def parse_required_key_instant_sec(
@@ -143,6 +177,8 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
         key_instant_start = parse_required_key_instant_sec(
             metadata, start_sec=start_sec, end_sec=end_sec, row_index=index
         )
+        dish_name_raw = metadata.get("dish_name")
+        dish_name = str(dish_name_raw).strip() if dish_name_raw is not None else ""
         normalized.append(
             IdentifiedShot.model_validate(
                 {
@@ -150,8 +186,8 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
                     "startSec": start_sec,
                     "endSec": end_sec,
                     "vlmTag": tag,
-                    "confidenceScore": normalize_confidence(metadata.get("confidence_score")),
                     "keyInstantStartSec": key_instant_start,
+                    "dishName": dish_name or None,
                     "reasoning": str(metadata.get("reasoning", "")).strip(),
                 }
             )
@@ -197,6 +233,7 @@ class TwelveLabsVideoAnalyzer:
         *,
         clip_source_path: Path | None = None,
         clip_media: dict[str, Any] | None = None,
+        additional_context: ParsedReviewNotes | None = None,
     ) -> tuple[Clip, dict[str, Any]]:
         logical_source = clip_source_path if clip_source_path is not None else video_path
         media = clip_media if clip_media is not None else probe_media(logical_source)
@@ -206,6 +243,7 @@ class TwelveLabsVideoAnalyzer:
             upload_filename=upload_name,
             log_clip_name=logical_source.name,
         )
+        segment_defs = segment_definitions_with_extra_context(additional_context)
         task = self.client.analyze_async.tasks.create(
             video=VideoContext_AssetId(asset_id=asset.id),
             model_name=self.model,
@@ -214,7 +252,7 @@ class TwelveLabsVideoAnalyzer:
             max_segment_duration=self.max_segment_duration,
             response_format=AsyncResponseFormat(
                 type="segment_definitions",
-                segment_definitions=cast(list[Any], [SEGMENT_DEFINITION]),
+                segment_definitions=segment_defs,
             ),
         )
         print(f"[{logical_source.name}] Created TwelveLabs analysis task: {task.task_id}")

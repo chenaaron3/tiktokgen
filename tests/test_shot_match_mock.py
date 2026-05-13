@@ -12,7 +12,6 @@ def _mini_analysis() -> VlmAnalysis:
         startSec=0.0,
         endSec=4.0,
         vlmTag="the_interaction",
-        confidenceScore=0.9,
         keyInstantStartSec=2.0,
         reasoning="lift",
     )
@@ -56,7 +55,14 @@ def test_static_shot_match_orchestrator():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hi.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Matches the greeting beat.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Matches the greeting beat.",
+                    )
+                ],
             ),
         ],
     )

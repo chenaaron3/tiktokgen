@@ -19,6 +19,7 @@ EPSILON = 1e-6
 class ResolvedShot:
     clip_ref: str
     shot_ref: str
+    beat_span: int
     clip: Clip
     shot: IdentifiedShot
 
@@ -138,15 +139,18 @@ def build_resolved_sentences(
 
     ordered = sorted(sentence_ledger.sentences, key=lambda row: row.speech_start_sec)
     resolved: list[ResolvedSentence] = []
-    for sentence in ordered:
+    for sentence_index, sentence in enumerate(ordered):
         sid = sentence.sentence_id
         shots_assignment = assignment_by_sentence.get(sid)
         if shots_assignment is None:
             raise ValueError(f"missing assignments for sentence {sid!r}")
         beat_expected = sentence.beat_count
-        if len(shots_assignment) != beat_expected:
+        if sentence_index == 0 and any(shot_ref.beat_span != 1 for shot_ref in shots_assignment):
+            raise ValueError(f"sentence {sid!r}: hook shots must have beatSpan=1")
+        beat_total = sum(shot_ref.beat_span for shot_ref in shots_assignment)
+        if beat_total != beat_expected:
             raise ValueError(
-                f"sentence {sid!r}: expected {beat_expected} shots, got {len(shots_assignment)}"
+                f"sentence {sid!r}: expected {beat_expected} total beats, got {beat_total}"
             )
         resolved_shots: list[ResolvedShot] = []
         for shot_ref in shots_assignment:
@@ -160,6 +164,7 @@ def build_resolved_sentences(
                 ResolvedShot(
                     clip_ref=shot_ref.clip_id,
                     shot_ref=shot_ref.shot_id,
+                    beat_span=shot_ref.beat_span,
                     clip=clip_obj,
                     shot=identified_shot,
                 )
@@ -194,19 +199,20 @@ def assemble_render_plan(
         if sentence_duration <= 0:
             raise ValueError(f"non-positive sentence duration for {sid}")
         beat_expected = sentence.beat_count
-        allocated_shot_time = sentence_duration / float(beat_expected)
-        if allocated_shot_time <= 0:
+        seconds_per_beat = sentence_duration / float(beat_expected)
+        if seconds_per_beat <= 0:
             raise ValueError(f"non-positive allocated shot duration for {sid}")
 
         for j, resolved_shot in enumerate(resolved_sentence.shots):
             timeline_start = timeline_cursor
-            timeline_end = timeline_start + allocated_shot_time
+            shot_timeline_duration = seconds_per_beat * float(resolved_shot.beat_span)
+            timeline_end = timeline_start + shot_timeline_duration
             timeline_cursor = timeline_end
             source_start, source_end, playback_rate = resolve_source_window(
                 resolved_shot.shot.key_instant_start_sec,
                 resolved_shot.shot,
                 resolved_shot.clip,
-                allocated_shot_time,
+                shot_timeline_duration,
             )
             source_duration = source_end - source_start
             if source_duration <= 0:
@@ -218,7 +224,7 @@ def assemble_render_plan(
                 warnings.append(
                     "short source window retimed to fill beat duration: "
                     f"clip={resolved_shot.clip_ref} shot={resolved_shot.shot_ref} "
-                    f"source={source_duration:.3f}s timeline={allocated_shot_time:.3f}s "
+                    f"source={source_duration:.3f}s timeline={shot_timeline_duration:.3f}s "
                     f"rate={playback_rate:.3f}"
                 )
 

@@ -13,7 +13,6 @@ def _analysis() -> VlmAnalysis:
         startSec=0.0,
         endSec=4.0,
         vlmTag="the_interaction",
-        confidenceScore=0.9,
         keyInstantStartSec=2.0,
         reasoning="lift",
     )
@@ -43,9 +42,16 @@ def test_vlm_shots_row_shape_has_no_paths():
         "clipId",
         "shotId",
         "vlmTag",
-        "confidenceScore",
+        "dishName",
         "reasoning",
     }
+
+
+def test_vlm_shots_includes_dish_name_when_available():
+    analysis = _analysis()
+    analysis.clips[0].identified_shots[0].dish_name = "spicy miso ramen"
+    rows = build_vlm_shots_for_prompt(analysis)
+    assert rows[0]["dishName"] == "spicy miso ramen"
 
 
 def test_assemble_requires_matching_shot_count():
@@ -71,7 +77,7 @@ def test_assemble_requires_matching_shot_count():
             ),
         ],
     )
-    with pytest.raises(ValueError, match="expected 1 shots"):
+    with pytest.raises(ValueError, match="expected 1 total beats, got 0"):
         build_resolved_sentences(
             shot_match=bad,
             analysis=analysis,
@@ -87,7 +93,6 @@ def test_happy_assemble_matches_fixture_pipeline():
         startSec=4.0,
         endSec=7.5,
         vlmTag="texture_macro",
-        confidenceScore=0.85,
         keyInstantStartSec=4.25,
         reasoning="stretch",
     )
@@ -96,7 +101,6 @@ def test_happy_assemble_matches_fixture_pipeline():
         startSec=7.5,
         endSec=9.5,
         vlmTag="texture_macro",
-        confidenceScore=0.82,
         keyInstantStartSec=8.0,
         reasoning="close-up",
     )
@@ -127,14 +131,31 @@ def test_happy_assemble_matches_fixture_pipeline():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hello.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Opens on the first beat.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Opens on the first beat.",
+                    )
+                ],
             ),
             SentenceAssignment(
                 sentenceId="s1",
                 text="Again now.",
                 shots=[
-                    ShotRef(clipId="c0", shotId="m2", reasoning="Introduces the next visual beat."),
-                    ShotRef(clipId="c0", shotId="m3", reasoning="Provides variation for the second beat."),
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m2",
+                        beatSpan=1,
+                        reasoning="Introduces the next visual beat.",
+                    ),
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m3",
+                        beatSpan=1,
+                        reasoning="Provides variation for the second beat.",
+                    ),
                 ],
             ),
         ],
@@ -174,6 +195,124 @@ def test_happy_assemble_matches_fixture_pipeline():
     assert dumped["beats"][0]["shotId"] == "m1"
 
 
+def test_assemble_allows_two_beat_span_for_body_shot():
+    analysis = _analysis()
+    second_shot = IdentifiedShot(
+        shotId="m2",
+        startSec=4.0,
+        endSec=8.0,
+        vlmTag="texture_macro",
+        keyInstantStartSec=4.25,
+        reasoning="stretch",
+    )
+    analysis.clips[0].identified_shots.append(second_shot)
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Hook.",
+                speechStartSec=0.0,
+                speechEndSec=1.0,
+                beatCount=1,
+            ),
+            SentenceEntry(
+                sentenceId="s1",
+                text="Body line.",
+                speechStartSec=1.0,
+                speechEndSec=3.0,
+                beatCount=2,
+            ),
+        ]
+    )
+    shot_match = ShotMatch(
+        _planning="Test planning for body two-beat hold.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hook.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Uses a single-beat hook shot.",
+                    )
+                ],
+            ),
+            SentenceAssignment(
+                sentenceId="s1",
+                text="Body line.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m2",
+                        beatSpan=2,
+                        reasoning="Holds a strong texture shot for two beats.",
+                    )
+                ],
+            ),
+        ],
+    )
+    resolved = build_resolved_sentences(
+        shot_match=shot_match,
+        analysis=analysis,
+        sentence_ledger=ledger,
+        audio_duration_sec=3.0,
+    )
+    plan = assemble_render_plan(
+        resolved_sentences=resolved,
+        whisper_words=[],
+        voiceover_static_path="/tmp/audio.mp3",
+        audio_duration_sec=3.0,
+        run_id="runit",
+        created_at="iso",
+    )
+    assert len(plan.beats) == 2
+    beats = sorted(plan.beats, key=lambda b: b.timeline_start_sec)
+    assert abs(beats[0].timeline_end_sec - 1.0) < 1e-9
+    assert abs(beats[1].timeline_start_sec - 1.0) < 1e-9
+    assert abs(beats[1].timeline_end_sec - 3.0) < 1e-9
+
+
+def test_assemble_rejects_hook_shot_with_two_beat_span():
+    analysis = _analysis()
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Hook.",
+                speechStartSec=0.0,
+                speechEndSec=1.0,
+                beatCount=1,
+            )
+        ]
+    )
+    match = ShotMatch(
+        _planning="Test planning for hook beatSpan validation.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hook.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=2,
+                        reasoning="Invalid two-beat hook shot.",
+                    )
+                ],
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="hook shots must have beatSpan=1"):
+        build_resolved_sentences(
+            shot_match=match,
+            analysis=analysis,
+            sentence_ledger=ledger,
+            audio_duration_sec=1.0,
+        )
+
+
 def test_assemble_rejects_nonzero_first_sentence_start():
     analysis = _analysis()
     ledger = SentenceLedger(
@@ -193,7 +332,14 @@ def test_assemble_rejects_nonzero_first_sentence_start():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hi.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Covers the only beat.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Covers the only beat.",
+                    )
+                ],
             )
         ]
     )
@@ -213,7 +359,6 @@ def test_assemble_rejects_sentence_gap():
         startSec=4.0,
         endSec=8.0,
         vlmTag="texture_macro",
-        confidenceScore=0.8,
         keyInstantStartSec=4.5,
         reasoning="alt",
     )
@@ -242,12 +387,26 @@ def test_assemble_rejects_sentence_gap():
             SentenceAssignment(
                 sentenceId="s0",
                 text="One.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Represents the first sentence.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Represents the first sentence.",
+                    )
+                ],
             ),
             SentenceAssignment(
                 sentenceId="s1",
                 text="Two.",
-                shots=[ShotRef(clipId="c0", shotId="m2", reasoning="Represents the second sentence.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m2",
+                        beatSpan=1,
+                        reasoning="Represents the second sentence.",
+                    )
+                ],
             ),
         ]
     )
@@ -279,7 +438,14 @@ def test_assemble_requires_last_sentence_end_to_match_audio():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Hi.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Matches the short greeting.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Matches the short greeting.",
+                    )
+                ],
             )
         ]
     )
@@ -298,7 +464,6 @@ def test_source_window_shifts_left_when_key_near_right_edge():
         startSec=5.0,
         endSec=7.0,
         vlmTag="the_interaction",
-        confidenceScore=0.9,
         keyInstantStartSec=6.8,
         reasoning="lift",
     )
@@ -337,7 +502,14 @@ def test_source_window_shifts_left_when_key_near_right_edge():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Stretch.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Keeps focus on the key instant.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Keeps focus on the key instant.",
+                    )
+                ],
             )
         ]
     )
@@ -367,7 +539,6 @@ def test_source_window_uses_full_clip_duration_when_shot_window_too_short():
         startSec=1.1,
         endSec=2.0,
         vlmTag="the_interaction",
-        confidenceScore=0.9,
         keyInstantStartSec=1.2,
         reasoning="lift",
     )
@@ -406,7 +577,14 @@ def test_source_window_uses_full_clip_duration_when_shot_window_too_short():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Stretch longer.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Uses available clip duration.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Uses available clip duration.",
+                    )
+                ],
             )
         ],
     )
@@ -436,7 +614,6 @@ def test_short_clip_is_retimed_instead_of_raising():
         startSec=1.1,
         endSec=2.0,
         vlmTag="the_interaction",
-        confidenceScore=0.9,
         keyInstantStartSec=1.2,
         reasoning="lift",
     )
@@ -475,7 +652,14 @@ def test_short_clip_is_retimed_instead_of_raising():
             SentenceAssignment(
                 sentenceId="s0",
                 text="Short clip retime.",
-                shots=[ShotRef(clipId="c0", shotId="m1", reasoning="Uses retime fallback.")],
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Uses retime fallback.",
+                    )
+                ],
             )
         ],
     )

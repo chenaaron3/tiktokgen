@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from util import PathUtil
+from vlm.notes import ParsedReviewNotes
 from vlm.providers import VideoAnalysisBackend
 from vlm.schema import VlmAnalysis
 
@@ -27,7 +28,6 @@ def _minimal_fake_analysis(source: Path) -> dict:
                 "startSec": 0.0,
                 "endSec": 1.0,
                 "vlmTag": "not_suitable",
-                "confidenceScore": 0.5,
                 "keyInstantStartSec": 0.5,
                 "reasoning": "fake",
             }
@@ -47,7 +47,12 @@ class FakeVlmBackend:
     def __init__(self, run_dir: Path) -> None:
         self._paths = PathUtil(run_dir)
 
-    def analyze(self, source: Path) -> VlmAnalysis:
+    def analyze(
+        self,
+        source: Path,
+        additional_context: ParsedReviewNotes | None = None,
+        use_cache: bool = True,
+    ) -> VlmAnalysis:
         vlm_path = self._paths.vlm_analysis_json()
         if vlm_path.is_file():
             return VlmAnalysis.model_validate(json.loads(vlm_path.read_text()))

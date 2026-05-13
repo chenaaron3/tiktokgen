@@ -17,11 +17,12 @@ from project_inputs import PROJECT_ROOT, resolve_run_directory
 from util import PathUtil, resolve_bundled_project
 from util.render import run_remotion_render
 from vlm import TwelveLabsVideoAnalysisBackend
+from vlm.notes import parse_review_notes
 from vlm.media import probe_media
 
 class PipelineStep(StrEnum):
-    SCRIPT = "script"
     VLM = "vlm"
+    SCRIPT = "script"
     TTS = "tts"
     WHISPER = "whisper"
     SENTENCE_LEDGER = "sentence_ledger"
@@ -31,8 +32,8 @@ class PipelineStep(StrEnum):
 
 
 _STEP_ORDER: dict[PipelineStep, int] = {
-    PipelineStep.SCRIPT: 1,
-    PipelineStep.VLM: 2,
+    PipelineStep.VLM: 1,
+    PipelineStep.SCRIPT: 2,
     PipelineStep.TTS: 3,
     PipelineStep.WHISPER: 4,
     PipelineStep.SENTENCE_LEDGER: 5,
@@ -41,8 +42,8 @@ _STEP_ORDER: dict[PipelineStep, int] = {
     PipelineStep.RENDER: 8,
 }
 _BREAK_STEPS: tuple[PipelineStep, ...] = (
-    PipelineStep.SCRIPT,
     PipelineStep.VLM,
+    PipelineStep.SCRIPT,
     PipelineStep.TTS,
     PipelineStep.MATCH,
     PipelineStep.ASSEMBLE,
@@ -67,7 +68,7 @@ def parse_args() -> argparse.Namespace:
         "source",
         type=Path,
         help=(
-            "Bundled **project folder**: videos for VLM plus **notes.txt** (exact filename) "
+            "Bundled **project folder**: videos for VLM plus **notes.yaml** (exact filename) "
             "in that same directory."
         ),
     )
@@ -103,13 +104,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Exit successfully right after this pipeline step. "
-            "Steps: script (after script.txt), vlm (after VLM analysis), "
+            "Steps: vlm (after VLM analysis), script (after script.txt), "
             "tts (after voice synthesize only; Whisper and later skipped on this run), "
             "match (after shot-match.json), assemble (after render-plan.json; Remotion render skipped)."
         ),
     )
     parser.add_argument(
-        "--rerun-from",
+        "--from",
         dest="rerun_from",
         metavar="STEP",
         type=PipelineStep,
@@ -117,7 +118,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Bypass cache for this step and all following pipeline stages. "
-            "Example: --rerun-from match reruns shot-match, assemble, and render "
+            "Example: --from match reruns shot-match, assemble, and render "
             "while still reusing script/VLM/TTS/Whisper/ledger cache."
         ),
     )
@@ -144,24 +145,28 @@ def main() -> int:
     print(f"\nFootage source: {footage_root}")
     print(f"Notes file: {notes_path_resolved}")
 
+    notes_text = notes_path_resolved.read_text(encoding="utf-8")
+    parsed_notes = parse_review_notes(notes_text)
+
+    # Analyze footage
+    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(
+        footage_root,
+        parsed_notes,
+        should_use_cache(step=PipelineStep.VLM, rerun_from=rerun_from),
+    )
+
+    if break_after == PipelineStep.VLM:
+        print("Stopping after VLM (--break vlm).")
+        return 0
+
     # Create script from notes
     script_text = LitellmScriptGenerator(paths=paths).generate(
-        notes_path_resolved.read_text(),
+        notes_text,
         use_cache=should_use_cache(step=PipelineStep.SCRIPT, rerun_from=rerun_from),
     )
 
     if break_after == PipelineStep.SCRIPT:
         print("Stopping after script (--break script).")
-        return 0
-
-    # Analyze footage
-    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(
-        footage_root,
-        use_cache=should_use_cache(step=PipelineStep.VLM, rerun_from=rerun_from),
-    )
-
-    if break_after == PipelineStep.VLM:
-        print("Stopping after VLM (--break vlm).")
         return 0
 
     # Generate voiceover

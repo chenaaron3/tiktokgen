@@ -13,7 +13,7 @@ RESTAURANT_VLM_TAGS: tuple[str, ...] = (
     "the_cross_section",
     "the_bite",
     "the_reaction",
-    "receipt_shot",
+    "info_shot",
     "not_suitable",
 )
 
@@ -24,26 +24,47 @@ _REST_DEFS: tuple[tuple[str, str], ...] = (
     ("establishing_interior", "Restaurant decor, lighting"),
     
     # Food Preparation (Server Action)
-    ("the_serve", "Server's hands placing the dish onto the table."),
-    ("the_preparation", "Server actively modifying the dish: pouring broth, plating, or cooking."),
-    
+    (
+        "the_serve",
+        "Server hands placing dish; food sharp, ~2/3 of frame, stays in shot (not drifting in/out).",
+    ),
+    (
+        "the_preparation",
+        "Server modifying dish (pour/plate/cook); food sharp, ~2/3 of frame, stable framing.",
+    ),
+
     # Food Interaction (User Action)
-    ("texture_macro", "Close-up of untouched food, locked focus on surface details"),
-    ("the_interaction", "User manipulating food: lifting with chopsticks, stirring, or dipping."),
-    ("the_cross_section", "Food being sliced or pulled apart to reveal internal layers."),
+    (
+        "texture_macro",
+        "Untouched food close-up; sharp focus, food ~2/3 of frame with clear surface detail.",
+    ),
+    (
+        "the_interaction",
+        "User moves food with hands/utensils; food stays sharp and mostly in frame (~2/3), not slipping in/out.",
+    ),
+    (
+        "the_cross_section",
+        "Slicing/pulling apart to show interior; food sharp, ~2/3 of frame, continuous framing.",
+    ),
     
     # Food Reaction
     ("the_bite", "Subject actively taking a bite of the food."),
     ("the_reaction", "Clear facial expression showing a reaction after tasting."),
     
     # Informational
-    ("receipt_shot", "Legible, stable close-up of the printed bill or price menu."),
+    ("info_shot", "Legible, stable close-up of menu prices, printed bill, or receipt."),
     
     # General
-    ("not_suitable", "Unusable footage: blurry, excessively shaky, dark, or obstructed."),
+    ("not_suitable", "Blurry/out-of-focus/motion-blur, too dark, very shaky, or obstructed."),
 )
 
-_REST_RULES = "B-roll: one slug each seg; key in [start,end]; Types:: "
+_HARD_RULES = (
+    "RULES: Noticeably blurry, soft-focus, or heavy motion-blur footage must be tagged not_suitable only—do not stretch it into food or establishing tags. "
+    "When unsure whether quality is acceptable, choose not_suitable rather than a flattering tag. "
+    "For the_preparation, texture_macro, the_interaction, the_cross_section: food must stay in focus and occupy about 2/3 of the frame; "
+    "if the food repeatedly enters and leaves frame or is rarely visible, tag not_suitable. "
+)
+_REST_RULES = _HARD_RULES + "B-roll: one slug each seg; key in [start,end]; Types:: "
 
 
 def build_restaurant_segment_description() -> str:

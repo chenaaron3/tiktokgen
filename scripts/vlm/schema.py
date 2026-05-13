@@ -31,7 +31,6 @@ class IdentifiedShot(BaseModel):
     start_sec: float = Field(alias="startSec")
     end_sec: float = Field(alias="endSec")
     vlm_tag: str = Field(alias="vlmTag")
-    confidence_score: float = Field(alias="confidenceScore", ge=0.0, le=1.0)
     key_instant_start_sec: float = Field(
         alias="keyInstantStartSec",
         description=(
@@ -39,6 +38,7 @@ class IdentifiedShot(BaseModel):
             "must lie in [startSec, endSec]."
         ),
     )
+    dish_name: str | None = Field(default=None, alias="dishName")
     reasoning: str
 
     @field_validator("vlm_tag")
