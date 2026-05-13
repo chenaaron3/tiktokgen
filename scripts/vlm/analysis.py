@@ -28,7 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MIN_TWELVELABS_VIDEO_DURATION_SEC = 4.0
 
 # Concurrent video workers in ``run()`` (TwelveLabs API batch); fixed default for programmatic use.
-MAX_PARALLEL_VIDEO_ANALYSES = 20
+MAX_PARALLEL_VIDEO_ANALYSES = 10
 _STAGE_DIR_PATTERN = re.compile(r"^\d+_.+")
 
 
@@ -180,7 +180,7 @@ def run(
         print(f"Discovered {len(videos)} video(s)")
     skipped_clips: list[dict[str, Any]] = []
 
-    max_workers = min(max(1, args.max_concurrency), 20, len(videos))
+    max_workers = min(max(1, args.max_concurrency), 10, len(videos))
     print(f"Processing with max concurrency: {max_workers}")
 
     results: list[tuple[Clip, dict[str, Any]] | None] = [None] * len(videos)

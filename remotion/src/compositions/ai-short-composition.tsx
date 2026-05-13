@@ -4,6 +4,8 @@ import {
     useVideoConfig
 } from 'remotion';
 
+import { ActiveHookTitle } from '../components/titles';
+
 export type RenderWord = {
   word: string;
   startSec: number;
@@ -93,13 +95,13 @@ const firstSentenceDurationSec = (
   totalDurationSec: number,
 ): number => {
   const firstSentenceId = sortedBeats[0]?.sentenceId;
-  if (!firstSentenceId) return Math.min(3, totalDurationSec);
+  if (!firstSentenceId) return Math.min(5, totalDurationSec);
   let endSec = 0;
   for (const beat of sortedBeats) {
     if (beat.sentenceId !== firstSentenceId) break;
     endSec = Math.max(endSec, beat.timelineEndSec);
   }
-  return endSec > 0 ? Math.min(endSec, totalDurationSec) : Math.min(3, totalDurationSec);
+  return endSec > 0 ? Math.min(endSec, totalDurationSec) : Math.min(5, totalDurationSec);
 };
 
 const WordCaption: React.FC<{ activeWord: RenderWord | null }> = ({ activeWord }) => {
@@ -137,38 +139,6 @@ const WordCaption: React.FC<{ activeWord: RenderWord | null }> = ({ activeWord }
   );
 };
 
-const HookTitle: React.FC<{ text: string }> = ({ text }) => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 12], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 132,
-        left: 52,
-        right: 52,
-        color: 'white',
-        fontFamily: 'Inter, Helvetica, Arial, sans-serif',
-        fontSize: 52,
-        fontWeight: 800,
-        lineHeight: 1.06,
-        textAlign: 'center',
-        letterSpacing: -0.3,
-        WebkitTextStroke: '6px rgba(0,0,0,0.98)',
-        paintOrder: 'stroke fill',
-        textShadow:
-          '0 0 2px rgba(0,0,0,0.98), 0 2px 6px rgba(0,0,0,0.95), 0 6px 18px rgba(0,0,0,0.85)',
-        opacity,
-      }}
-    >
-      {text}
-    </div>
-  );
-};
-
 export const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
   const { fps } = useVideoConfig();
   const frame = useCurrentFrame();
@@ -189,9 +159,10 @@ export const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
     [sortedBeats, fps],
   );
   const hookDurationSec = useMemo(
-    () => firstSentenceDurationSec(sortedBeats, plan.durationSec),
+    () => Math.min(Math.max(firstSentenceDurationSec(sortedBeats, plan.durationSec), 5), plan.durationSec),
     [sortedBeats, plan.durationSec],
   );
+  const hookDurationFrames = secondsToFrames(hookDurationSec, fps);
 
   const hook = plan.theme?.hookText ?? '';
   const words = plan.words ?? [];
@@ -245,8 +216,8 @@ export const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
       ) : null}
 
       {hook ? (
-        <Sequence from={0} durationInFrames={secondsToFrames(hookDurationSec, fps)}>
-          <HookTitle text={hook} />
+        <Sequence from={0} durationInFrames={hookDurationFrames}>
+          <ActiveHookTitle text={hook} durationInFrames={hookDurationFrames} />
         </Sequence>
       ) : null}
 
