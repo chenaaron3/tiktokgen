@@ -9,7 +9,8 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@remotion-shared/*": ["../remotion/src/*"]
     },
 
     /* Bundler mode */

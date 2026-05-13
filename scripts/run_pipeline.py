@@ -11,7 +11,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from edit import LitellmShotMatchOrchestrator
 from edit.assemble import assemble_render_plan, build_resolved_sentences
-from narrative import ElevenLabsTts, FasterWhisperWordTranscriber, LitellmScriptGenerator, build_sentence_ledger
+from narrative import (
+    ElevenLabsTts,
+    FasterWhisperWordTranscriber,
+    LitellmScriptGenerator,
+    build_sentence_ledger,
+)
 from pydantic import ValidationError
 from project_inputs import PROJECT_ROOT, resolve_run_directory
 from util import PathUtil, resolve_bundled_project
@@ -160,7 +165,7 @@ def main() -> int:
         return 0
 
     # Create script from notes
-    script_text = LitellmScriptGenerator(paths=paths).generate(
+    hook_text, narration_script = LitellmScriptGenerator(paths=paths).generate(
         notes_text,
         use_cache=should_use_cache(step=PipelineStep.SCRIPT, rerun_from=rerun_from),
     )
@@ -171,7 +176,7 @@ def main() -> int:
 
     # Generate voiceover
     voice_path = ElevenLabsTts(paths=paths).synthesize(
-        script_text,
+        narration_script,
         use_cache=should_use_cache(step=PipelineStep.TTS, rerun_from=rerun_from),
     )
     voice_duration = probe_media(voice_path).get("durationSec")
@@ -220,6 +225,7 @@ def main() -> int:
         audio_duration_sec=audio_duration_sec,
         run_id=analysis.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
+        hook_text=hook_text or "",
         paths=paths,
     )
 

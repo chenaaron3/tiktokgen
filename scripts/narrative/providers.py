@@ -10,8 +10,8 @@ from contracts import WordToken
 
 @runtime_checkable
 class ScriptGenerator(Protocol):
-    def generate(self, notes: str, *, use_cache: bool = True) -> str:
-        """Return spoken script body (may load from cached ``script.txt``, call an LLM, or echo a stub)."""
+    def generate(self, notes: str, *, use_cache: bool = True) -> tuple[str, str]:
+        """Return ``(hook_text, narration_script)`` parsed from script output."""
         ...
 
 

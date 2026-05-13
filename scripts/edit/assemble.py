@@ -247,7 +247,6 @@ def assemble_render_plan(
                     sourceEndSec=source_end,
                     timelineStartSec=timeline_start,
                     timelineEndSec=timeline_end,
-                    playbackRate=playback_rate,
                 )
             )
 
@@ -256,7 +255,7 @@ def assemble_render_plan(
     ]
     hook = (
         hook_text.strip()
-        if hook_text
+        if hook_text is not None
         else (resolved_sentences[0].sentence.text.strip() if resolved_sentences else "Short")
     )
     if beats_out and abs(beats_out[-1].timeline_end_sec - audio_duration_sec) > EPSILON:

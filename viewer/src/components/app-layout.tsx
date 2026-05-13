@@ -1,13 +1,13 @@
-import { ChevronRight } from "lucide-react"
-import { useEffect } from "react"
+import { ChevronRight } from 'lucide-react';
+import { useEffect } from 'react';
 
-import { ClipWorkspace } from "@/components/clip-workspace"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { findClipById, useViewerStore } from "@/store/viewer-store"
-
-import { cn } from "@/lib/utils"
+import { ClipWorkspace } from '@/components/clip-workspace';
+import { PreviewWorkspace } from '@/components/preview-workspace';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { findClipById, useViewerStore } from '@/store/viewer-store';
 
 export function AppLayout() {
   const fetchRuns = useViewerStore((s) => s.fetchRuns)
@@ -23,6 +23,11 @@ export function AppLayout() {
   const analysisLoading = useViewerStore((s) => s.analysisLoading)
   const analysisError = useViewerStore((s) => s.analysisError)
   const selectedRunId = useViewerStore((s) => s.selectedRunId)
+  const analysis = useViewerStore((s) => s.analysis)
+  const renderPlan = useViewerStore((s) => s.renderPlan)
+  const previewAvailable = useViewerStore((s) => s.previewAvailable)
+  const workspaceTab = useViewerStore((s) => s.workspaceTab)
+  const setWorkspaceTab = useViewerStore((s) => s.setWorkspaceTab)
 
   useEffect(() => {
     void fetchRuns()
@@ -44,6 +49,37 @@ export function AppLayout() {
                   <span className="text-zinc-500">←</span> Runs
                 </Button>
                 <Separator className="opacity-70" />
+                <div
+                  className={cn(
+                    "grid gap-1 rounded-md border border-zinc-800 bg-zinc-900 p-1",
+                    previewAvailable ? "grid-cols-2" : "grid-cols-1",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceTab("clips")}
+                    className={cn(
+                      "rounded px-2 py-1 text-xs font-medium transition-colors",
+                      workspaceTab === "clips" ? "bg-zinc-700 text-zinc-50" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                    )}
+                  >
+                    Clips
+                  </button>
+                  {previewAvailable ? (
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceTab("preview")}
+                      className={cn(
+                        "rounded px-2 py-1 text-xs font-medium transition-colors",
+                        workspaceTab === "preview"
+                          ? "bg-zinc-700 text-zinc-50"
+                          : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                      )}
+                    >
+                      Preview
+                    </button>
+                  ) : null}
+                </div>
                 <p className="px-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Clips</p>
                 {analysisLoading ? (
                   <p className="px-2 text-xs text-zinc-500">Loading…</p>
@@ -107,10 +143,14 @@ export function AppLayout() {
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <ClipWorkspace
-          key={`${selectedRunId ?? ""}:${selectedClipId ?? ""}`}
-          clip={findClipById(clipsSorted, selectedClipId)}
-        />
+        {workspaceTab === "preview" && previewAvailable ? (
+          <PreviewWorkspace analysis={analysis} renderPlan={renderPlan} />
+        ) : (
+          <ClipWorkspace
+            key={`${selectedRunId ?? ""}:${selectedClipId ?? ""}`}
+            clip={findClipById(clipsSorted, selectedClipId)}
+          />
+        )}
       </main>
     </div>
   )

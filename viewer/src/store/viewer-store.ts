@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { VlmAnalysis, VlmClip } from "@/types/vlm"
+import type { RenderPlan, ShotMatch, VlmAnalysis, VlmClip } from "@/types/vlm"
 
 export interface RunSummary {
   runId: string
@@ -28,9 +28,13 @@ interface ViewerState {
   selectedRunId: string | null
   view: "runs" | "clips"
   analysis: VlmAnalysis | null
+  shotMatch: ShotMatch | null
+  renderPlan: RenderPlan | null
+  previewAvailable: boolean
   analysisLoading: boolean
   analysisError: string | null
   clipsSorted: VlmClip[]
+  workspaceTab: "clips" | "preview"
 
   selectedClipId: string | null
 
@@ -38,6 +42,14 @@ interface ViewerState {
   closeRun: () => void
 
   selectClip: (clipId: string | null) => void
+  setWorkspaceTab: (tab: "clips" | "preview") => void
+}
+
+async function fetchJsonOrNull<T>(url: string): Promise<T | null> {
+  const res = await fetch(url)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return (await res.json()) as T
 }
 
 export const useViewerStore = create<ViewerState>((set) => ({
@@ -48,9 +60,13 @@ export const useViewerStore = create<ViewerState>((set) => ({
   selectedRunId: null,
   view: "runs",
   analysis: null,
+  shotMatch: null,
+  renderPlan: null,
+  previewAvailable: false,
   analysisLoading: false,
   analysisError: null,
   clipsSorted: [],
+  workspaceTab: "clips",
 
   selectedClipId: null,
 
@@ -78,19 +94,30 @@ export const useViewerStore = create<ViewerState>((set) => ({
       analysisLoading: true,
       analysisError: null,
       analysis: null,
+      shotMatch: null,
+      renderPlan: null,
+      previewAvailable: false,
       clipsSorted: [],
       selectedClipId: null,
+      workspaceTab: "clips",
     })
     try {
-      const res = await fetch(`/api/run/${encodeURIComponent(runId)}/analysis`)
-      if (!res.ok) {
-        throw new Error(`${res.status} ${res.statusText}`)
+      const encodedRunId = encodeURIComponent(runId)
+      const [analysis, shotMatch, renderPlan] = await Promise.all([
+        fetchJsonOrNull<VlmAnalysis>(`/api/run/${encodedRunId}/analysis`),
+        fetchJsonOrNull<ShotMatch>(`/api/run/${encodedRunId}/shot-match`),
+        fetchJsonOrNull<RenderPlan>(`/api/run/${encodedRunId}/render-plan`),
+      ])
+      if (!analysis) {
+        throw new Error("analysis not found")
       }
-      const analysis = (await res.json()) as VlmAnalysis
       const clipsSorted = sortedClips(analysis.clips ?? [])
       const firstId = clipsSorted[0]?.id ?? null
       set({
         analysis,
+        shotMatch,
+        renderPlan,
+        previewAvailable: Boolean(shotMatch && renderPlan),
         clipsSorted,
         analysisLoading: false,
         selectedClipId: firstId,
@@ -108,13 +135,18 @@ export const useViewerStore = create<ViewerState>((set) => ({
       view: "runs",
       selectedRunId: null,
       analysis: null,
+      shotMatch: null,
+      renderPlan: null,
+      previewAvailable: false,
       analysisError: null,
       clipsSorted: [],
       selectedClipId: null,
       analysisLoading: false,
+      workspaceTab: "clips",
     }),
 
   selectClip: (clipId: string | null) => set({ selectedClipId: clipId }),
+  setWorkspaceTab: (tab) => set({ workspaceTab: tab }),
 }))
 
 export function findClipById(sorted: VlmClip[], id: string | null): VlmClip | null {

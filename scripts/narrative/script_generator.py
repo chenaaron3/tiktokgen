@@ -1,6 +1,7 @@
 """LLM-backed script generation (LiteLLM).
 
-Used by ``run_pipeline`` with a run ``PathUtil``: ``generate(notes)`` returns ``script.txt`` when present,
+Used by ``run_pipeline`` with a run ``PathUtil``: ``generate(notes)`` returns
+``(hook_text, narration_script)`` parsed from ``script.txt`` when present,
 otherwise writes ``script.draft.txt`` via LiteLLM and ``SystemExit(0)`` until approved.
 """
 
@@ -14,6 +15,7 @@ from dotenv import load_dotenv
 
 from logger import install_local_observability_logger
 from narrative.providers import ScriptGenerator
+from narrative.script_format import split_script_title_and_body
 from util import PathUtil
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -47,11 +49,11 @@ class LitellmScriptGenerator(ScriptGenerator):
         self._obs_path.parent.mkdir(parents=True, exist_ok=True)
         install_local_observability_logger()
 
-    def generate(self, notes: str, *, use_cache: bool = True) -> str:
+    def generate(self, notes: str, *, use_cache: bool = True) -> tuple[str, str]:
         notes = notes.strip()
         approved = self._paths.script_txt()
         if use_cache and approved.is_file():
-            return approved.read_text()
+            return self._parse_script(approved.read_text())
 
         if not notes:
             raise ValueError("Notes are empty")
@@ -62,6 +64,12 @@ class LitellmScriptGenerator(ScriptGenerator):
         print(f"Wrote script draft: {draft}")
         print("Copy or rename script.draft.txt → script.txt before continuing.")
         raise SystemExit(0)
+
+    def _parse_script(self, script_text: str) -> tuple[str, str]:
+        hook_text, narration_script = split_script_title_and_body(script_text)
+        if not narration_script.strip():
+            raise RuntimeError("script narration is empty after removing optional title line")
+        return (hook_text or "", narration_script)
 
     def _complete_via_litellm(self, notes: str) -> str:
         system_prompt = _load_prompt(self._prompt_path)

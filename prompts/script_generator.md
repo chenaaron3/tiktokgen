@@ -6,6 +6,8 @@ Turn my notes into a first-person, conversational script that sounds like a real
 
 ### Output Requirements
 
+- The first non-empty line must be a short title prefixed with `# ` (examples: `# Hidden gem rooftop bar`, `# A5 Wagyu tasting`).
+- The title is visual-only metadata and should not be spoken like narration.
 - Write the script in **breath groups**. Start a new line for every new thought, natural pause, or sentence. Do not write one large block of text.
 - Do **not** use bullets, headings, or labels in the output. Just the spoken words.
 - Do **not** mention this prompt or the fact that you are transforming notes.

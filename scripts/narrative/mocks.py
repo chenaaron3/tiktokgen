@@ -13,8 +13,8 @@ class StaticScriptGenerator(ScriptGenerator):
     def __init__(self, script: str) -> None:
         self._script = script
 
-    def generate(self, notes: str, *, use_cache: bool = True) -> str:
-        return self._script
+    def generate(self, notes: str, *, use_cache: bool = True) -> tuple[str, str]:
+        return "", self._script
 
 
 class StaticTts(TextToSpeech):

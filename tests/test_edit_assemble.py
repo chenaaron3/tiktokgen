@@ -188,11 +188,11 @@ def test_happy_assemble_matches_fixture_pipeline():
     assert abs(beats[1].timeline_end_sec - 2.0) < 1e-9
     assert abs(beats[2].timeline_start_sec - 2.0) < 1e-9
     assert abs(beats[2].timeline_end_sec - 3.0) < 1e-9
-    assert all(abs(b.playback_rate - 1.0) < 1e-9 for b in beats)
     assert abs(plan.duration_sec - 3.0) < 1e-9
     dumped = plan.model_dump(by_alias=True)
     assert "beats" in dumped
     assert dumped["beats"][0]["shotId"] == "m1"
+    assert "playbackRate" not in dumped["beats"][0]
 
 
 def test_assemble_allows_two_beat_span_for_body_shot():
@@ -680,5 +680,54 @@ def test_short_clip_is_retimed_instead_of_raising():
     beat = plan.beats[0]
     assert abs(beat.source_start_sec - 0.0) < 1e-9
     assert abs(beat.source_end_sec - 1.898) < 1e-9
-    assert beat.playback_rate < 1.0
     assert plan.warnings and "short source window retimed" in plan.warnings[0]
+    assert "rate=0." in plan.warnings[0]
+
+
+def test_assemble_uses_explicit_empty_hook_without_fallback():
+    analysis = _analysis()
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Hook sentence fallback.",
+                speechStartSec=0.0,
+                speechEndSec=1.0,
+                beatCount=1,
+            )
+        ]
+    )
+    shot_match = ShotMatch(
+        _planning="Test planning for explicit empty hook behavior.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hook sentence fallback.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Uses the only available shot.",
+                    )
+                ],
+            )
+        ],
+    )
+    resolved = build_resolved_sentences(
+        shot_match=shot_match,
+        analysis=analysis,
+        sentence_ledger=ledger,
+        audio_duration_sec=1.0,
+    )
+    plan = assemble_render_plan(
+        resolved_sentences=resolved,
+        whisper_words=[],
+        voiceover_static_path="/tmp/audio.mp3",
+        audio_duration_sec=1.0,
+        run_id="runit",
+        created_at="iso",
+        hook_text="",
+    )
+    assert plan.theme is not None
+    assert plan.theme.hook_text == ""

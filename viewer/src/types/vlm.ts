@@ -28,3 +28,55 @@ export interface VlmAnalysis {
   clips?: VlmClip[] | null
   provider?: Record<string, unknown>
 }
+
+export interface ShotRef {
+  clipId: string
+  shotId: string
+  beatSpan: number
+  reasoning: string
+}
+
+export interface ShotMatchAssignment {
+  sentenceId: string
+  text: string
+  shots: ShotRef[]
+}
+
+export interface ShotMatch {
+  _planning?: string
+  assignments: ShotMatchAssignment[]
+}
+
+export interface RenderWord {
+  word: string
+  startSec: number
+  endSec: number
+}
+
+export interface RenderBeat {
+  beatId: string
+  sentenceId: string
+  clipId: string
+  shotId: string
+  sourcePath: string
+  sourceStartSec: number
+  sourceEndSec: number
+  timelineStartSec: number
+  timelineEndSec: number
+}
+
+export interface RenderTheme {
+  hookText?: string
+}
+
+export interface RenderPlan {
+  runId?: string
+  createdAt?: string
+  durationSec: number
+  voiceoverStaticPath: string
+  theme?: RenderTheme | null
+  beats: RenderBeat[]
+  words: RenderWord[]
+  assumptions?: string[]
+  warnings?: string[]
+}

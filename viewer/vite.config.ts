@@ -25,6 +25,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(viewerDir, "./src"),
+      "@remotion-shared": path.resolve(viewerDir, "../remotion/src"),
     },
+    dedupe: ["react", "react-dom", "remotion"],
   },
 })

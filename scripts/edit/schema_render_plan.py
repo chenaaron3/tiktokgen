@@ -25,7 +25,6 @@ class RenderBeat(BaseModel):
     source_end_sec: float = Field(ge=0.0, alias="sourceEndSec")
     timeline_start_sec: float = Field(ge=0.0, alias="timelineStartSec")
     timeline_end_sec: float = Field(ge=0.0, alias="timelineEndSec")
-    playback_rate: float = Field(gt=0.0, alias="playbackRate")
 
 
 class RenderTheme(BaseModel):
