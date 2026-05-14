@@ -8,8 +8,9 @@ import sys
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
+
 from dotenv import load_dotenv
-from edit import LitellmShotMatchOrchestrator
+from edit import LitellmAgentReviewOrchestrator, LitellmShotMatchOrchestrator
 from edit.assemble import assemble_render_plan, build_resolved_sentences
 from narrative import (
     ElevenLabsTts,
@@ -32,6 +33,7 @@ class PipelineStep(StrEnum):
     WHISPER = "whisper"
     SENTENCE_LEDGER = "sentence_ledger"
     MATCH = "match"
+    AGENT_REVIEW = "agent_review"
     ASSEMBLE = "assemble"
     RENDER = "render"
 
@@ -43,14 +45,16 @@ _STEP_ORDER: dict[PipelineStep, int] = {
     PipelineStep.WHISPER: 4,
     PipelineStep.SENTENCE_LEDGER: 5,
     PipelineStep.MATCH: 6,
-    PipelineStep.ASSEMBLE: 7,
-    PipelineStep.RENDER: 8,
+    PipelineStep.AGENT_REVIEW: 7,
+    PipelineStep.ASSEMBLE: 8,
+    PipelineStep.RENDER: 9,
 }
 _BREAK_STEPS: tuple[PipelineStep, ...] = (
     PipelineStep.VLM,
     PipelineStep.SCRIPT,
     PipelineStep.TTS,
     PipelineStep.MATCH,
+    PipelineStep.AGENT_REVIEW,
     PipelineStep.ASSEMBLE,
 )
 _RERUN_STEPS: tuple[PipelineStep, ...] = tuple(PipelineStep)
@@ -78,27 +82,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--run-id",
-        default=None,
-        metavar="ID",
-        help=(
-            "Run folder name under --cache-dir (YYYYMMDD-HHMMSS or with -## suffix). "
-            "If omitted (and without --resume), a new timestamp directory is created."
-        ),
-    )
-    parser.add_argument(
         "--cache-dir",
         type=Path,
         default=Path("cache"),
-        help="Base directory scanned by --resume and used for new timestamp runs (default: cache/).",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help=(
-            "Use the most recently modified subdirectory of --cache-dir as the run directory "
-            "(conflicts with --run-id)."
-        ),
+        help="Base directory for source-keyed run folders (default: cache/).",
     )
     parser.add_argument(
         "--break",
@@ -111,7 +98,9 @@ def parse_args() -> argparse.Namespace:
             "Exit successfully right after this pipeline step. "
             "Steps: vlm (after VLM analysis), script (after script.txt), "
             "tts (after voice synthesize only; Whisper and later skipped on this run), "
-            "match (after shot-match.json), assemble (after render-plan.json; Remotion render skipped)."
+            "match (after shot-match.json), "
+            "agent_review (after agentic review loop finalizes shot-match.json), "
+            "assemble (after render-plan.json; Remotion render skipped)."
         ),
     )
     parser.add_argument(
@@ -123,7 +112,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Bypass cache for this step and all following pipeline stages. "
-            "Example: --from match reruns shot-match, assemble, and render "
+            "Example: --from match reruns shot-match, agent_review, assemble, and render "
             "while still reusing script/VLM/TTS/Whisper/ledger cache."
         ),
     )
@@ -133,10 +122,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     load_dotenv(PROJECT_ROOT / ".env")
     args = parse_args()
+    footage_root, notes_path_resolved = resolve_bundled_project(args.source)
     run_dir = resolve_run_directory(
-        run_id=args.run_id,
-        resume=args.resume,
         cache_dir_arg=args.cache_dir,
+        source_dir=footage_root,
     )
     run_dir.mkdir(parents=True, exist_ok=True)
     paths = PathUtil(run_dir)
@@ -144,8 +133,6 @@ def main() -> int:
     break_after: PipelineStep | None = args.break_after
     if rerun_from is not None:
         print(f"Bypassing cache from step '{rerun_from.value}' onward.")
-
-    footage_root, notes_path_resolved = resolve_bundled_project(args.source)
 
     print(f"\nFootage source: {footage_root}")
     print(f"Notes file: {notes_path_resolved}")
@@ -211,6 +198,21 @@ def main() -> int:
         return 0
 
     audio_duration_sec = max(float(voice_duration), 0.01)
+    shot_match = LitellmAgentReviewOrchestrator(paths).refine_shot_match(
+        shot_match=shot_match,
+        analysis=analysis,
+        ledger=ledger,
+        words=words,
+        voiceover_static_path=str(voice_path.resolve()),
+        audio_duration_sec=audio_duration_sec,
+        hook_text=hook_text or "",
+        use_cache=should_use_cache(step=PipelineStep.AGENT_REVIEW, rerun_from=rerun_from),
+    )
+
+    if break_after == PipelineStep.AGENT_REVIEW:
+        print("Stopping after agent_review (--break agent_review).")
+        return 0
+
     resolved_sentences = build_resolved_sentences(
         shot_match=shot_match,
         analysis=analysis,

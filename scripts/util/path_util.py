@@ -62,6 +62,21 @@ class PathUtil:
     def shot_match_llm_observability_json(self) -> Path:
         return self.llm_observability_dir() / "shot-match.json"
 
+    def agent_review_dir(self) -> Path:
+        return self._stage_dir("6b_agent_review")
+
+    def agent_review_state_json(self) -> Path:
+        return self.agent_review_dir() / "state.json"
+
+    def agent_review_tools_jsonl(self) -> Path:
+        return self.llm_observability_dir() / "agent-review-tools.jsonl"
+
+    def agent_review_llm_observability_json(self, name: str) -> Path:
+        safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in name).strip("-")
+        if not safe:
+            safe = "agent-review"
+        return self.llm_observability_dir() / f"agent-review-{safe}.json"
+
     def render_plan_json(self) -> Path:
         return self._stage_dir("7_assemble") / "render-plan.json"
 

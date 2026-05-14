@@ -56,6 +56,15 @@ SEGMENT_DEFINITION: dict[str, Any] = {
                 "the_preparation, the_interaction, or the_reaction. Use empty string when unknown."
             ),
         },
+        {
+            "name": "semantic_context",
+            "type": "string",
+            "description": (
+                "Detailed natural-language scene description for shot replacement, including subject, "
+                "setting, action, camera/framing, and visible text when present. Use empty string "
+                "when unknown."
+            ),
+        },
     ],
 }
 
@@ -179,6 +188,10 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
         )
         dish_name_raw = metadata.get("dish_name")
         dish_name = str(dish_name_raw).strip() if dish_name_raw is not None else ""
+        semantic_context_raw = metadata.get("semantic_context")
+        semantic_context = (
+            str(semantic_context_raw).strip() if semantic_context_raw is not None else None
+        )
         normalized.append(
             IdentifiedShot.model_validate(
                 {
@@ -189,6 +202,7 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
                     "keyInstantStartSec": key_instant_start,
                     "dishName": dish_name or None,
                     "reasoning": str(metadata.get("reasoning", "")).strip(),
+                    "semanticContext": semantic_context or None,
                 }
             )
         )

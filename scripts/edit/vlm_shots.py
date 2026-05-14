@@ -12,7 +12,7 @@ def build_vlm_shots_for_prompt(analysis: VlmAnalysis) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for clip in analysis.clips:
         for shot in clip.identified_shots:
-            row = {
+            row: dict[str, Any] = {
                 "clipId": clip.id,
                 "shotId": shot.shot_id,
                 "vlmTag": shot.vlm_tag,
@@ -20,5 +20,7 @@ def build_vlm_shots_for_prompt(analysis: VlmAnalysis) -> list[dict[str, Any]]:
             }
             if shot.dish_name:
                 row["dishName"] = shot.dish_name
+            if shot.semantic_context:
+                row["semanticContext"] = shot.semantic_context
             rows.append(row)
     return rows

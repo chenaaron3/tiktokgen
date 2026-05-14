@@ -13,7 +13,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from project_inputs import create_run_directory
+from project_inputs import resolve_run_directory
 from .media import discover_videos, extend_video_below_minimum_twelvelabs_duration, probe_media
 from .notes import ParsedReviewNotes
 from .schema import Clip, Provider, VlmAnalysis
@@ -158,7 +158,7 @@ def run(
         raise SystemExit(f"Source must be a file or directory: {source_path}")
 
     if output_dir is None:
-        run_root = create_run_directory(cache_dir.expanduser())
+        run_root = resolve_run_directory(cache_dir_arg=cache_dir, source_dir=source_path)
         resolved_output_dir = run_root / "2_vlm"
         run_id = run_root.name
     else:

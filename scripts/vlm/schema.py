@@ -40,6 +40,7 @@ class IdentifiedShot(BaseModel):
     )
     dish_name: str | None = Field(default=None, alias="dishName")
     reasoning: str
+    semantic_context: str | None = Field(default=None, alias="semanticContext")
 
     @field_validator("vlm_tag")
     @classmethod
