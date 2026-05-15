@@ -6,6 +6,7 @@ import { PreviewWorkspace } from '@/components/preview-workspace';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { clipHasGptLabel } from '@/lib/shot-label-meta';
 import { cn } from '@/lib/utils';
 import { findClipById, useViewerStore } from '@/store/viewer-store';
 
@@ -25,6 +26,7 @@ export function AppLayout() {
   const selectedRunId = useViewerStore((s) => s.selectedRunId)
   const analysis = useViewerStore((s) => s.analysis)
   const renderPlan = useViewerStore((s) => s.renderPlan)
+  const shotMatch = useViewerStore((s) => s.shotMatch)
   const previewAvailable = useViewerStore((s) => s.previewAvailable)
   const workspaceTab = useViewerStore((s) => s.workspaceTab)
   const setWorkspaceTab = useViewerStore((s) => s.setWorkspaceTab)
@@ -90,6 +92,7 @@ export function AppLayout() {
                     {clipsSorted.map((clip) => {
                       const id = clip.id ?? clip.originalFilename ?? "clip"
                       const active = selectedClipId === id
+                      const hasGpt = clipHasGptLabel(clip)
                       return (
                         <li key={id}>
                           <button
@@ -101,7 +104,14 @@ export function AppLayout() {
                             )}
                           >
                             <ChevronRight className="size-3 shrink-0 opacity-50" aria-hidden />
-                            <span className="truncate">{clip.originalFilename ?? id}</span>
+                            <span className="min-w-0 flex-1 truncate">{clip.originalFilename ?? id}</span>
+                            {hasGpt ? (
+                              <span
+                                className="size-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.55)]"
+                                title="Contains GPT-verified shot"
+                                aria-label="Contains GPT-verified shot"
+                              />
+                            ) : null}
                           </button>
                         </li>
                       )
@@ -144,7 +154,7 @@ export function AppLayout() {
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {workspaceTab === "preview" && previewAvailable ? (
-          <PreviewWorkspace analysis={analysis} renderPlan={renderPlan} />
+          <PreviewWorkspace analysis={analysis} renderPlan={renderPlan} shotMatch={shotMatch} />
         ) : (
           <ClipWorkspace
             key={`${selectedRunId ?? ""}:${selectedClipId ?? ""}`}

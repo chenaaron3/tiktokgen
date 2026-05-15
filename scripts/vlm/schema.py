@@ -2,11 +2,54 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .restaurant_tags import RESTAURANT_VLM_TAGS
+
+LabelConfidence = Literal["low", "medium", "high"]
+VerifiedBy = Literal["twelvelabs", "gpt"]
+MediaOrientation = Literal["horizontal", "vertical", "square", "unknown"]
+LABEL_CONFIDENCE_VALUES: tuple[str, ...] = ("low", "medium", "high")
+
+
+class GeoLocation(BaseModel):
+    """GPS / ISO 6709 location from clip metadata (extra keys allowed)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    latitude: float | None = None
+    longitude: float | None = None
+    raw: str | None = None
+    source: str | None = None
+    altitude: float | None = None
+
+
+class CaptureMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    captured_at: str | None = Field(default=None, alias="capturedAt")
+    location: GeoLocation | None = None
+
+
+class ClipMedia(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    duration_sec: float | None = Field(default=None, alias="durationSec")
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
+    has_audio: bool | None = Field(default=None, alias="hasAudio")
+    orientation: MediaOrientation = "unknown"
+    capture_metadata: CaptureMetadata = Field(
+        default_factory=CaptureMetadata,
+        alias="captureMetadata",
+    )
+
+    @classmethod
+    def empty(cls) -> ClipMedia:
+        return cls()
 
 
 class Provider(BaseModel):
@@ -41,6 +84,8 @@ class IdentifiedShot(BaseModel):
     dish_name: str | None = Field(default=None, alias="dishName")
     reasoning: str
     semantic_context: str | None = Field(default=None, alias="semanticContext")
+    label_confidence: LabelConfidence = Field(alias="labelConfidence")
+    verified_by: VerifiedBy = Field(alias="verifiedBy")
 
     @field_validator("vlm_tag")
     @classmethod
@@ -72,8 +117,8 @@ class Clip(BaseModel):
     original_filename: str = Field(alias="originalFilename")
     duration_sec: float | None = Field(alias="durationSec")
     captured_at: str | None = Field(alias="capturedAt")
-    location: dict[str, Any] | None
-    media: dict[str, Any]
+    location: GeoLocation | None = None
+    media: ClipMedia
     twelve_labs: TwelveLabsClipRef = Field(alias="twelveLabs")
     summary: str
     identified_shots: list[IdentifiedShot] = Field(alias="identifiedShots")

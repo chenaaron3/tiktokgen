@@ -3,7 +3,7 @@
 from contracts import SentenceEntry, SentenceLedger
 from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
 from edit.shot_match_llm import StaticShotMatchOrchestrator
-from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
+from vlm.schema import Clip, ClipMedia, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
 
 
 def _mini_analysis() -> VlmAnalysis:
@@ -14,6 +14,8 @@ def _mini_analysis() -> VlmAnalysis:
         vlmTag="the_interaction",
         keyInstantStartSec=2.0,
         reasoning="lift",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     clip = Clip(
         id="c0",
@@ -22,7 +24,7 @@ def _mini_analysis() -> VlmAnalysis:
         durationSec=20.0,
         capturedAt=None,
         location=None,
-        media={},
+        media=ClipMedia.empty(),
         twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
         summary="s",
         identifiedShots=[shot],

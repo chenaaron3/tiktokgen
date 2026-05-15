@@ -49,8 +49,8 @@ One pipeline execution's artifact tree for a given project (analysis, editorial 
 _Avoid_: Build, session, cache folder.
 
 **Analysis**:
-The VLM's structured read of a project's clips — which shots exist, what they depict, and supporting metadata.
-_Avoid_: VLM output, clip analysis, tagging.
+The trusted structured read of a **Project**'s **Clips** — which **Shots** exist, what they depict, and dish linkage — produced only after the VLM phase passes quality gates.
+_Avoid_: VLM output, clip analysis, tagging; treating unverified provider output as **Analysis**.
 
 **Clip**:
 One source video file in a project — raw footage, typically 10–60 seconds, analyzed independently by the VLM.
@@ -61,8 +61,16 @@ A unit of time on the short's timeline — the rhythmic measure the edit is pace
 _Avoid_: Shot (source-side); cut, scene.
 
 **Shot**:
-A VLM-identified segment within a clip — a bounded time range with editorial metadata (tag, key instant, reasoning).
+A segment within a **Clip** — bounded time range with verified editorial metadata (tag, key instant, optional dish linkage, reasoning).
 _Avoid_: Moment (creative-contract alias); scene, take.
+
+**Shot label**:
+The taxonomy tag and dish linkage on a **Shot** once it is trusted for **Analysis**.
+_Avoid_: Raw provider metadata, unverified tag.
+
+**Label confidence**:
+TwelveLabs' certainty tier for an initial **Shot label** — `low`, `medium`, or `high` — before verification.
+_Avoid_: Score, probability, percentage.
 
 **A-roll**:
 Primary footage where the subject or narrator carries the story — typically talking head or direct-to-camera.
@@ -79,8 +87,8 @@ _Avoid_: Video (too generic); render, output, final MP4.
 ## Relationships
 
 - A **Project** contains one or more **Clips** and **Notes**.
-- A **Run** produces **Analysis** of the project's clips.
-- **Shot match** draws on **Analysis** when assigning shots.
+- A **Run** produces **Analysis** of the project's clips (verified before downstream stages run).
+- **Shot match** draws on **Analysis** only — it does not call the VLM again to recover labeling mistakes.
 - A **Clip** contains one or more **Shots** (from VLM analysis).
 - A **Script** becomes a **Voiceover**, then aligned **Sentences**; the first sentence is the **Hook**.
 - Each **Sentence** claims a number of **Beats** on the short timeline.
@@ -123,3 +131,6 @@ _Avoid_: Video (too generic); render, output, final MP4.
 - Creative contract uses "moment" for VLM-identified segments — resolved: canonical term is **Shot**.
 - Product spec uses "edit plan" for both shot match and render plan — resolved: **Shot match** (minimal, editable) vs **Render plan** (resolved, for Remotion).
 - **A-roll** / **B-roll** industry terms — resolved: this product produces **B-roll** shorts with **Voiceover**; **A-roll** is defined for contrast but out of scope.
+- Unverified TwelveLabs labels vs downstream trust — resolved: pay the cost in the VLM phase; **Shot match** must not use ad-hoc VLM queries to fix bad labels.
+- What “reliable VLM” guarantees — resolved: every **Shot** in **Analysis** has a verified **Shot label** (taxonomy tag and `dishName` when applicable).
+- When GPT re-verifies a shot — resolved: **Label confidence** `low` or `medium` escalates to GPT; `high` is accepted into **Analysis** when schema-valid.

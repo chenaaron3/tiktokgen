@@ -117,7 +117,9 @@ export const useViewerStore = create<ViewerState>((set) => ({
         analysis,
         shotMatch,
         renderPlan,
-        previewAvailable: Boolean(shotMatch && renderPlan),
+        previewAvailable: Boolean(
+          shotMatch?.assignments?.length && renderPlan?.beats?.length,
+        ),
         clipsSorted,
         analysisLoading: false,
         selectedClipId: firstId,

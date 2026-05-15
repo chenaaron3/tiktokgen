@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { ShotMetadataPanel } from "@/components/workspace/shot-metadata-panel"
+import { formatShotTimelineTitle } from "@/lib/shot-label-meta"
+import { ShotMetadataPanel } from "@/components/workspace/shot-metadata"
 import { ShotTimeline, type TimelineMoment, type TimelineSegment } from "@/components/workspace/shot-timeline"
 import { WorkspaceLayout } from "@/components/workspace/workspace-layout"
 import type { IdentifiedShot, VlmClip } from "@/types/vlm"
@@ -88,7 +89,7 @@ export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
     startSec: shot.startSec ?? 0,
     endSec: shot.endSec ?? 0,
     label: shot.vlmTag ?? "?",
-    title: shot.vlmTag ?? "?",
+    title: formatShotTimelineTitle(shot),
   }))
 
   const keyMoments: TimelineMoment[] = shots.map((shot, idx) => {
@@ -100,7 +101,7 @@ export function ClipWorkspace({ clip }: { clip: VlmClip | null }) {
     return {
       id: `key-${idx}-${shot.shotId ?? "unknown"}`,
       sec: keyMoment,
-      title: `${shot.vlmTag ?? "shot"} • key moment ${keyMoment.toFixed(2)}s`,
+      title: `${formatShotTimelineTitle(shot)} • key ${keyMoment.toFixed(2)}s`,
     }
   })
 

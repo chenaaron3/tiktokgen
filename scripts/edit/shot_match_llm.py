@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from contracts import SentenceLedger
 from edit.schema_shot_match import ShotMatch
 from edit.strict_json import make_openai_strict_schema
-from edit.vlm_shots import build_vlm_shots_for_prompt
+from edit.vlm_shots import format_shot_match_user_message
 from logger import install_local_observability_logger
 from util import PathUtil, read_json_model, write_json_model
 from vlm.schema import VlmAnalysis
@@ -67,9 +67,6 @@ class LitellmShotMatchOrchestrator:
         obs_file = self._paths.shot_match_llm_observability_json().resolve()
         install_local_observability_logger()
 
-        sentences_payload = [s.model_dump(by_alias=True) for s in ledger.sentences]
-        vlm_shots = build_vlm_shots_for_prompt(analysis)
-
         schema = make_openai_strict_schema(ShotMatch.model_json_schema(by_alias=True))
         response_format = {
             "type": "json_schema",
@@ -79,16 +76,13 @@ class LitellmShotMatchOrchestrator:
                 "strict": True,
             },
         }
-        payload = {
-            "sentences": sentences_payload,
-            "vlmShots": vlm_shots,
-        }
+        user_content = format_shot_match_user_message(ledger=ledger, analysis=analysis)
         metadata = {"stage": "shot_match", "observabilityPath": str(obs_file)}
         raw = _chat_completion_json(
             model=SHOT_MATCH_MODEL,
             messages=[
                 {"role": "system", "content": SHOT_GENERATOR_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                {"role": "user", "content": user_content},
             ],
             response_format=response_format,
             metadata=metadata,

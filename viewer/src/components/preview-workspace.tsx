@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     PREVIEW_FPS, PREVIEW_HEIGHT, PREVIEW_WIDTH, RenderPlanPreviewComposition
 } from '@/components/workspace/preview-composition';
-import { ShotMetadataPanel } from '@/components/workspace/shot-metadata-panel';
+import { shotMatchReasoningForBeat } from "@/lib/shot-match-lookup"
+import { formatShotTimelineTitle } from "@/lib/shot-label-meta"
+import { ShotMetadataPanel } from "@/components/workspace/shot-metadata"
 import { ShotTimeline } from '@/components/workspace/shot-timeline';
 import { WorkspaceLayout } from '@/components/workspace/workspace-layout';
 import { Player } from '@remotion/player';
@@ -11,7 +13,7 @@ import { Player } from '@remotion/player';
 import type { TimelineMoment, TimelineSegment } from '@/components/workspace/shot-timeline';
 import type { PlayerRef } from '@remotion/player';
 
-import type { IdentifiedShot, RenderBeat, RenderPlan, VlmAnalysis, VlmClip } from "@/types/vlm"
+import type { IdentifiedShot, RenderBeat, RenderPlan, ShotMatch, VlmAnalysis, VlmClip } from "@/types/vlm"
 
 function clipDurationSec(clip: VlmClip): number {
   const d = clip.durationSec ?? clip.media?.durationSec
@@ -29,7 +31,15 @@ function shotKey(clipId: string | undefined, shotId: string | undefined): string
   return `${clipId ?? ""}::${shotId ?? ""}`
 }
 
-export function PreviewWorkspace({ analysis, renderPlan }: { analysis: VlmAnalysis | null; renderPlan: RenderPlan | null }) {
+export function PreviewWorkspace({
+  analysis,
+  renderPlan,
+  shotMatch,
+}: {
+  analysis: VlmAnalysis | null
+  renderPlan: RenderPlan | null
+  shotMatch: ShotMatch | null
+}) {
   const playerRef = useRef<PlayerRef>(null)
   const [playheadSec, setPlayheadSec] = useState(0)
   const safeClips = useMemo(() => analysis?.clips ?? [], [analysis?.clips])
@@ -70,12 +80,13 @@ export function PreviewWorkspace({ analysis, renderPlan }: { analysis: VlmAnalys
       beatsSorted.map((beat) => {
         const shot = shotsByRef.get(shotKey(beat.clipId, beat.shotId))
         const label = shot?.vlmTag ?? beat.shotId
+        const title = shot ? formatShotTimelineTitle(shot) : `${beat.clipId} • ${beat.shotId}`
         return {
           id: beat.beatId,
           startSec: beat.timelineStartSec,
           endSec: beat.timelineEndSec,
           label,
-          title: `${beat.clipId} • ${beat.shotId}`,
+          title,
         }
       }),
     [beatsSorted, shotsByRef],
@@ -97,7 +108,7 @@ export function PreviewWorkspace({ analysis, renderPlan }: { analysis: VlmAnalys
           {
             id: `moment-${beat.beatId}`,
             sec: timelineMoment,
-            title: `${shot.vlmTag ?? beat.shotId} • key moment`,
+            title: `${formatShotTimelineTitle(shot)} • key moment`,
           },
         ]
       }),
@@ -107,6 +118,7 @@ export function PreviewWorkspace({ analysis, renderPlan }: { analysis: VlmAnalys
   const activeBeat = activeBeatForTime(beatsSorted, playheadSec)
   const activeClip = activeBeat ? clipsById.get(activeBeat.clipId) ?? null : null
   const activeShot = activeBeat ? shotsByRef.get(shotKey(activeBeat.clipId, activeBeat.shotId)) ?? null : null
+  const matchReasoning = shotMatchReasoningForBeat(shotMatch, activeBeat)
 
   const seekTo = useCallback((nextSec: number) => {
     const frame = Math.round(nextSec * PREVIEW_FPS)
@@ -160,6 +172,9 @@ export function PreviewWorkspace({ analysis, renderPlan }: { analysis: VlmAnalys
           durationSec={activeClip ? clipDurationSec(activeClip) : 0}
           activeShot={activeShot}
           emptyActiveShotMessage="No stitched clip spans the current playback time."
+          shotMatch={shotMatch}
+          activeBeat={activeBeat}
+          matchReasoning={matchReasoning}
         />
       }
       timeline={

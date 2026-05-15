@@ -167,7 +167,7 @@ def main() -> int:
         narration_script,
         use_cache=should_use_cache(step=PipelineStep.TTS, rerun_from=rerun_from),
     )
-    voice_duration = probe_media(voice_path).get("durationSec")
+    voice_duration = probe_media(voice_path).duration_sec
     if voice_duration is None:
         raise RuntimeError(f"Unable to determine voiceover duration for {voice_path}")
 

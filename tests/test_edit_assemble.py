@@ -3,8 +3,7 @@ import pytest
 from contracts import SentenceEntry, SentenceLedger, WordToken
 from edit.assemble import assemble_render_plan, build_resolved_sentences
 from edit.schema_shot_match import SentenceAssignment, ShotMatch, ShotRef
-from edit.vlm_shots import build_vlm_shots_for_prompt
-from vlm.schema import Clip, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
+from vlm.schema import Clip, ClipMedia, IdentifiedShot, Provider, TwelveLabsClipRef, VlmAnalysis
 
 
 def _analysis() -> VlmAnalysis:
@@ -15,6 +14,8 @@ def _analysis() -> VlmAnalysis:
         vlmTag="the_interaction",
         keyInstantStartSec=2.0,
         reasoning="lift",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     clip = Clip(
         id="c0",
@@ -23,7 +24,7 @@ def _analysis() -> VlmAnalysis:
         durationSec=20.0,
         capturedAt=None,
         location=None,
-        media={},
+        media=ClipMedia.empty(),
         twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
         summary="s",
         identifiedShots=[shot],
@@ -34,24 +35,6 @@ def _analysis() -> VlmAnalysis:
         provider=Provider(name="p", model="m", rawResponseRef=""),
         clips=[clip],
     )
-
-
-def test_vlm_shots_row_shape_has_no_paths():
-    rows = build_vlm_shots_for_prompt(_analysis())
-    assert rows and set(rows[0].keys()) <= {
-        "clipId",
-        "shotId",
-        "vlmTag",
-        "dishName",
-        "reasoning",
-    }
-
-
-def test_vlm_shots_includes_dish_name_when_available():
-    analysis = _analysis()
-    analysis.clips[0].identified_shots[0].dish_name = "spicy miso ramen"
-    rows = build_vlm_shots_for_prompt(analysis)
-    assert rows[0]["dishName"] == "spicy miso ramen"
 
 
 def test_assemble_requires_matching_shot_count():
@@ -95,6 +78,8 @@ def test_happy_assemble_matches_fixture_pipeline():
         vlmTag="texture_macro",
         keyInstantStartSec=4.25,
         reasoning="stretch",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     third_shot = IdentifiedShot(
         shotId="m3",
@@ -103,6 +88,8 @@ def test_happy_assemble_matches_fixture_pipeline():
         vlmTag="texture_macro",
         keyInstantStartSec=8.0,
         reasoning="close-up",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     analysis.clips[0].identified_shots.extend([second_shot, third_shot])
 
@@ -204,6 +191,8 @@ def test_assemble_allows_two_beat_span_for_body_shot():
         vlmTag="texture_macro",
         keyInstantStartSec=4.25,
         reasoning="stretch",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     analysis.clips[0].identified_shots.append(second_shot)
     ledger = SentenceLedger(
@@ -361,6 +350,8 @@ def test_assemble_rejects_sentence_gap():
         vlmTag="texture_macro",
         keyInstantStartSec=4.5,
         reasoning="alt",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     analysis.clips[0].identified_shots.append(second_shot)
     ledger = SentenceLedger(
@@ -466,6 +457,8 @@ def test_source_window_shifts_left_when_key_near_right_edge():
         vlmTag="the_interaction",
         keyInstantStartSec=6.8,
         reasoning="lift",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     clip = Clip(
         id="c0",
@@ -474,7 +467,7 @@ def test_source_window_shifts_left_when_key_near_right_edge():
         durationSec=7.0,
         capturedAt=None,
         location=None,
-        media={},
+        media=ClipMedia.empty(),
         twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
         summary="s",
         identifiedShots=[shot],
@@ -541,6 +534,8 @@ def test_source_window_uses_full_clip_duration_when_shot_window_too_short():
         vlmTag="the_interaction",
         keyInstantStartSec=1.2,
         reasoning="lift",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     clip = Clip(
         id="c0",
@@ -549,7 +544,7 @@ def test_source_window_uses_full_clip_duration_when_shot_window_too_short():
         durationSec=3.0,
         capturedAt=None,
         location=None,
-        media={},
+        media=ClipMedia.empty(),
         twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
         summary="s",
         identifiedShots=[shot],
@@ -616,6 +611,8 @@ def test_short_clip_is_retimed_instead_of_raising():
         vlmTag="the_interaction",
         keyInstantStartSec=1.2,
         reasoning="lift",
+        labelConfidence="high",
+        verifiedBy="twelvelabs",
     )
     clip = Clip(
         id="c0",
@@ -624,7 +621,7 @@ def test_short_clip_is_retimed_instead_of_raising():
         durationSec=1.898,
         capturedAt=None,
         location=None,
-        media={},
+        media=ClipMedia.empty(),
         twelveLabs=TwelveLabsClipRef(assetId="a", taskId="t"),
         summary="s",
         identifiedShots=[shot],

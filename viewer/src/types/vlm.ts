@@ -1,5 +1,33 @@
 /** VLM analysis JSON from cache (camelCase keys). */
 
+export type LabelConfidence = "low" | "medium" | "high"
+export type VerifiedBy = "twelvelabs" | "gpt"
+
+export type MediaOrientation = "horizontal" | "vertical" | "square" | "unknown"
+
+export interface GeoLocation {
+  latitude?: number
+  longitude?: number
+  raw?: string
+  source?: string
+  altitude?: number
+}
+
+export interface CaptureMetadata {
+  capturedAt?: string | null
+  location?: GeoLocation | null
+}
+
+export interface ClipMedia {
+  durationSec?: number | null
+  width?: number | null
+  height?: number | null
+  fps?: number | null
+  hasAudio?: boolean | null
+  orientation?: MediaOrientation
+  captureMetadata?: CaptureMetadata
+}
+
 export interface IdentifiedShot {
   shotId?: string
   startSec?: number
@@ -8,6 +36,9 @@ export interface IdentifiedShot {
   keyInstantStartSec?: number
   dishName?: string | null
   reasoning?: string
+  semanticContext?: string | null
+  labelConfidence?: LabelConfidence
+  verifiedBy?: VerifiedBy
 }
 
 export interface VlmClip {
@@ -18,8 +49,8 @@ export interface VlmClip {
   capturedAt?: string | null
   summary?: string
   identifiedShots?: IdentifiedShot[] | null
-  media?: { durationSec?: number | null; width?: number; height?: number; fps?: number } | null
-  location?: { latitude?: number; longitude?: number } | null
+  media?: ClipMedia | null
+  location?: GeoLocation | null
 }
 
 export interface VlmAnalysis {

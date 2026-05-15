@@ -16,7 +16,15 @@ from twelvelabs.types import AsyncResponseFormat, VideoContext_AssetId
 from .media import probe_media
 from .notes import ParsedReviewNotes
 from .restaurant_tags import RESTAURANT_SEGMENT_DESCRIPTION, RESTAURANT_VLM_TAGS
-from .schema import Clip, IdentifiedShot, TwelveLabsClipRef
+from .shot_labels import sanitize_dish_name
+from .schema import (
+    LABEL_CONFIDENCE_VALUES,
+    Clip,
+    ClipMedia,
+    IdentifiedShot,
+    LabelConfidence,
+    TwelveLabsClipRef,
+)
 
 # Defaults for TwelveLabs time-based segmentation (used programmatically + CLI fallback).
 DEFAULT_ANALYSIS_MODEL_NAME = "pegasus1.5"
@@ -47,6 +55,15 @@ SEGMENT_DEFINITION: dict[str, Any] = {
             "name": "reasoning",
             "type": "string",
             "description": "One short sentence with visual evidence for the tag.",
+        },
+        {
+            "name": "label_confidence",
+            "type": "string",
+            "description": (
+                "Certainty in the tag and dish_name together: high (clear visuals), "
+                "medium (some ambiguity), low (guess or poor quality)."
+            ),
+            "enum": list(LABEL_CONFIDENCE_VALUES),
         },
         {
             "name": "dish_name",
@@ -165,6 +182,19 @@ def parse_required_key_instant_sec(
     return key_start
 
 
+def parse_label_confidence(metadata: dict[str, Any], *, row_index: int) -> LabelConfidence:
+    raw = metadata.get("label_confidence")
+    if raw is None:
+        raise ValueError(f"segment {row_index}: label_confidence is required")
+    value = str(raw).strip().lower()
+    if value not in LABEL_CONFIDENCE_VALUES:
+        raise ValueError(
+            f"segment {row_index}: label_confidence must be one of {LABEL_CONFIDENCE_VALUES}, "
+            f"got {raw!r}"
+        )
+    return value  # type: ignore[return-value]
+
+
 def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]:
     raw_shots = raw_data.get("identified_shots")
     if not raw_shots and "moments" in raw_data:
@@ -192,20 +222,22 @@ def normalize_identified_shots(raw_data: dict[str, Any]) -> list[IdentifiedShot]
         semantic_context = (
             str(semantic_context_raw).strip() if semantic_context_raw is not None else None
         )
-        normalized.append(
-            IdentifiedShot.model_validate(
-                {
-                    "shotId": f"shot-{index:03d}",
-                    "startSec": start_sec,
-                    "endSec": end_sec,
-                    "vlmTag": tag,
-                    "keyInstantStartSec": key_instant_start,
-                    "dishName": dish_name or None,
-                    "reasoning": str(metadata.get("reasoning", "")).strip(),
-                    "semanticContext": semantic_context or None,
-                }
-            )
+        label_confidence = parse_label_confidence(metadata, row_index=index)
+        shot = IdentifiedShot.model_validate(
+            {
+                "shotId": f"shot-{index:03d}",
+                "startSec": start_sec,
+                "endSec": end_sec,
+                "vlmTag": tag,
+                "keyInstantStartSec": key_instant_start,
+                "dishName": dish_name or None,
+                "reasoning": str(metadata.get("reasoning", "")).strip(),
+                "semanticContext": semantic_context or None,
+                "labelConfidence": label_confidence,
+                "verifiedBy": "twelvelabs",
+            }
         )
+        normalized.append(sanitize_dish_name(shot))
 
     normalized.sort(key=lambda s: s.start_sec)
     return normalized
@@ -246,7 +278,7 @@ class TwelveLabsVideoAnalyzer:
         video_path: Path,
         *,
         clip_source_path: Path | None = None,
-        clip_media: dict[str, Any] | None = None,
+        clip_media: ClipMedia | None = None,
         additional_context: ParsedReviewNotes | None = None,
     ) -> tuple[Clip, dict[str, Any]]:
         logical_source = clip_source_path if clip_source_path is not None else video_path
@@ -281,9 +313,9 @@ class TwelveLabsVideoAnalyzer:
             id=resolved_clip_id,
             sourcePath=str(logical_source),
             originalFilename=logical_source.name,
-            durationSec=media.get("durationSec"),
-            capturedAt=media.get("captureMetadata", {}).get("capturedAt"),
-            location=media.get("captureMetadata", {}).get("location"),
+            durationSec=media.duration_sec,
+            capturedAt=media.capture_metadata.captured_at,
+            location=media.capture_metadata.location,
             media=media,
             twelveLabs=TwelveLabsClipRef(assetId=asset.id, taskId=task.task_id),
             summary=summary,

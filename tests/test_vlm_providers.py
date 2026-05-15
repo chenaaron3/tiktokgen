@@ -31,6 +31,8 @@ def _minimal_fake_analysis(source: Path) -> VlmAnalysis:
                 "vlmTag": "not_suitable",
                 "keyInstantStartSec": 0.5,
                 "reasoning": "fake",
+                "labelConfidence": "high",
+                "verifiedBy": "twelvelabs",
             }
         ],
     }

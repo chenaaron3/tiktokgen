@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from vlm.schema import CaptureMetadata, ClipMedia, GeoLocation
+
 
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".avi", ".mkv", ".webm"}
 
@@ -71,7 +73,7 @@ def collect_tags(ffprobe_data: dict[str, Any]) -> dict[str, Any]:
     return tags
 
 
-def parse_capture_metadata(ffprobe_data: dict[str, Any]) -> dict[str, Any]:
+def parse_capture_metadata(ffprobe_data: dict[str, Any]) -> CaptureMetadata:
     """Extract captured time and location from ffprobe tags when available."""
     tags = collect_tags(ffprobe_data)
     captured_at = (
@@ -84,29 +86,16 @@ def parse_capture_metadata(ffprobe_data: dict[str, Any]) -> dict[str, Any]:
         or tags.get("location")
         or tags.get("location-eng")
     )
-
-    return {
-        "capturedAt": captured_at,
-        "location": parse_iso6709_location(location_raw),
-    }
+    location_dict = parse_iso6709_location(location_raw)
+    location = GeoLocation.model_validate(location_dict) if location_dict else None
+    return CaptureMetadata(capturedAt=captured_at, location=location)
 
 
-def empty_media_metadata() -> dict[str, Any]:
-    return {
-        "durationSec": None,
-        "width": None,
-        "height": None,
-        "fps": None,
-        "hasAudio": None,
-        "orientation": "unknown",
-        "captureMetadata": {
-            "capturedAt": None,
-            "location": None,
-        },
-    }
+def empty_media_metadata() -> ClipMedia:
+    return ClipMedia.empty()
 
 
-def probe_media(video_path: Path) -> dict[str, Any]:
+def probe_media(video_path: Path) -> ClipMedia:
     """Best-effort media probe. Requires ffprobe; falls back to unknown values."""
     command = [
         "ffprobe",
@@ -146,15 +135,16 @@ def probe_media(video_path: Path) -> dict[str, Any]:
         else:
             orientation = "square"
 
-    return {
-        "durationSec": float(duration) if duration else None,
-        "width": width,
-        "height": height,
-        "fps": fps,
-        "hasAudio": has_audio,
-        "orientation": orientation,
-        "captureMetadata": parse_capture_metadata(data),
-    }
+    capture = parse_capture_metadata(data)
+    return ClipMedia(
+        durationSec=float(duration) if duration else None,
+        width=width,
+        height=height,
+        fps=fps,
+        hasAudio=has_audio,
+        orientation=orientation,
+        captureMetadata=capture,
+    )
 
 
 def extend_video_below_minimum_twelvelabs_duration(
@@ -172,7 +162,7 @@ def extend_video_below_minimum_twelvelabs_duration(
     not ``None``. Timestamps on the original portion match the source.
     """
     media = probe_media(video_path)
-    duration = media.get("durationSec")
+    duration = media.duration_sec
     if duration is None or duration >= minimum_sec:
         return (video_path, None)
 
@@ -195,7 +185,7 @@ def extend_video_below_minimum_twelvelabs_duration(
         "-vf",
         vf,
     ]
-    if media.get("hasAudio"):
+    if media.has_audio:
         cmd += ["-af", f"apad=pad_dur={pad_sec}", "-c:v", "libx264", "-c:a", "aac"]
     else:
         cmd += ["-c:v", "libx264", "-an"]

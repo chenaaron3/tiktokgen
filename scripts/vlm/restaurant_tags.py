@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 # Single source of truth for TwelveLabs enum and Pydantic validation.
+FOOD_DISH_TAGS: frozenset[str] = frozenset(
+    {
+        "the_serve",
+        "the_preparation",
+        "texture_macro",
+        "the_interaction",
+        "the_cross_section",
+        "the_bite",
+        "the_reaction",
+    }
+)
+
 RESTAURANT_VLM_TAGS: tuple[str, ...] = (
     "establishing_exterior",
     "establishing_interior",

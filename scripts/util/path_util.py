@@ -46,6 +46,19 @@ class PathUtil:
     def vlm_analysis_json(self) -> Path:
         return self.stage_dir(RunStage.VLM) / "vlm-analysis.json"
 
+    def vlm_verify_frames_dir(self) -> Path:
+        path = self.stage_dir(RunStage.VLM) / "verify-frames"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def vlm_verify_llm_observability_json(self, clip_id: str, shot_id: str) -> Path:
+        name = f"{clip_id}-{shot_id}"
+        safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in name).strip("-")
+        if not safe:
+            safe = "vlm-verify"
+        self.llm_observability_dir().mkdir(parents=True, exist_ok=True)
+        return self.llm_observability_dir() / f"vlm-verify-{safe}.json"
+
     def voiceover_mp3(self) -> Path:
         return self.stage_dir(RunStage.TTS) / "voiceover.mp3"
 

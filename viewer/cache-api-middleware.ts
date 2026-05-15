@@ -91,16 +91,57 @@ function sendText(res: http.ServerResponse, status: number, message: string) {
   res.end(message);
 }
 
+function firstExistingPath(...candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 /** Under ``runDir``, first match for ``globPattern`` from ``globSync`` (order is not guaranteed). */
-function findRunFilePath(runDir: string, globPattern: string): string | null {
+function findRunFilePath(
+  runDir: string,
+  globPattern: string,
+  options?: { excludeDirNames?: string[] },
+): string | null {
   let matches: string[];
   try {
     matches = globSync(globPattern, { cwd: runDir });
   } catch {
     return null;
   }
-  if (matches.length === 0) return null;
-  return path.join(runDir, matches[0]);
+  const exclude = new Set(options?.excludeDirNames ?? []);
+  const filtered = matches.filter((rel) => {
+    const parts = rel.split(path.sep);
+    return !parts.some((part) => exclude.has(part));
+  });
+  if (filtered.length === 0) return null;
+  filtered.sort();
+  return path.join(runDir, filtered[0]);
+}
+
+/** Editorial ``shot-match.json`` (not ``llm-observability/shot-match.json``). */
+function findShotMatchPath(runDir: string): string | null {
+  const canonical = firstExistingPath(
+    path.join(runDir, "6_match", "shot-match.json"),
+    path.join(runDir, "shot-match.json"),
+  );
+  if (canonical) return canonical;
+  return findRunFilePath(runDir, "**/shot-match.json", {
+    excludeDirNames: ["llm-observability"],
+  });
+}
+
+function findRenderPlanPath(runDir: string): string | null {
+  return (
+    firstExistingPath(
+      path.join(runDir, "7_assemble", "render-plan.json"),
+      path.join(runDir, "render-plan.json"),
+    ) ??
+    findRunFilePath(runDir, "**/render-plan.json", {
+      excludeDirNames: ["llm-observability"],
+    })
+  );
 }
 
 export function createCacheApiMiddleware(
@@ -170,8 +211,8 @@ export function createCacheApiMiddleware(
         artifact === "analysis"
           ? findRunFilePath(runDir, "**/vlm-analysis.json")
           : artifact === "shot-match"
-            ? findRunFilePath(runDir, "**/shot-match.json")
-            : findRunFilePath(runDir, "**/render-plan.json");
+            ? findShotMatchPath(runDir)
+            : findRenderPlanPath(runDir);
       const resolved = artifactPath
         ? resolveUnderRepoRoot(repoRootAbs, artifactPath)
         : null;

@@ -12,6 +12,7 @@ def test_normalize_identified_shots_keeps_high_confidence_food_dish_name():
                     "metadata": {
                         "vlm_tag": "the_interaction",
                         "key_instant_start_sec": 1.2,
+                        "label_confidence": "high",
                         "dish_name": "wagyu katsu sando",
                         "reasoning": "Lifts the sandwich to reveal filling texture.",
                     },
@@ -21,6 +22,29 @@ def test_normalize_identified_shots_keeps_high_confidence_food_dish_name():
     )
     assert len(shots) == 1
     assert shots[0].dish_name == "wagyu katsu sando"
+    assert shots[0].label_confidence == "high"
+    assert shots[0].verified_by == "twelvelabs"
+
+
+def test_normalize_identified_shots_requires_label_confidence():
+    import pytest
+
+    with pytest.raises(ValueError, match="label_confidence is required"):
+        normalize_identified_shots(
+            {
+                "identified_shots": [
+                    {
+                        "start_time": 0.0,
+                        "end_time": 3.0,
+                        "metadata": {
+                            "vlm_tag": "texture_macro",
+                            "key_instant_start_sec": 1.0,
+                            "reasoning": "Close-up of noodles.",
+                        },
+                    }
+                ]
+            }
+        )
 
 
 def test_normalize_identified_shots_preserves_dish_name_when_provided():
@@ -33,6 +57,7 @@ def test_normalize_identified_shots_preserves_dish_name_when_provided():
                     "metadata": {
                         "vlm_tag": "establishing_interior",
                         "key_instant_start_sec": 1.2,
+                        "label_confidence": "medium",
                         "dish_name": "should not pass through",
                         "reasoning": "Shows ambient interior lighting and decor.",
                     },
@@ -41,7 +66,7 @@ def test_normalize_identified_shots_preserves_dish_name_when_provided():
         }
     )
     assert len(shots) == 1
-    assert shots[0].dish_name == "should not pass through"
+    assert shots[0].dish_name is None
 
 
 def test_segment_definition_constrains_dish_name_to_notes_context_names():

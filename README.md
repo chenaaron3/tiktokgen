@@ -27,11 +27,12 @@ Shared Python code is grouped under `scripts/`:
 - `scripts/fixtures/pipeline.py`: sample words + sample `ShotMatch` for tests.
 - `scripts/logger/`: local LiteLLM observability logger.
 
-VLM only (`source` may be **one video** or a **directory**; writes `cache/<run-uuid>/vlm-analysis.json`):
+VLM analysis runs TwelveLabs segmentation, then GPT vision verification for shots with `labelConfidence` `low` or `medium` (`high` is accepted as-is). Output is trusted `vlm-analysis.json` under `2_vlm/`.
+
+VLM only (project folder with videos + `notes.yaml`; stops after `2_vlm/vlm-analysis.json`):
 
 ```sh
-PYTHONPATH=scripts uv run python -m vlm.analysis path/to/clip.mov
-PYTHONPATH=scripts uv run python -m vlm.analysis path/to/folder/of/clips
+PYTHONPATH=scripts uv run python scripts/run_pipeline.py assets/05-03 --break vlm
 ```
 
 Install dependencies:
