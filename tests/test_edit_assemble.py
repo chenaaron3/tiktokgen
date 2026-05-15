@@ -263,6 +263,144 @@ def test_assemble_allows_two_beat_span_for_body_shot():
     assert abs(beats[1].timeline_end_sec - 3.0) < 1e-9
 
 
+def test_assemble_allows_multi_beat_hold_on_one_shot_ref():
+    analysis = _analysis()
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Hook.",
+                speechStartSec=0.0,
+                speechEndSec=1.0,
+                beatCount=1,
+            ),
+            SentenceEntry(
+                sentenceId="s1",
+                text="The burger was juicy, flavorful, and satisfying.",
+                speechStartSec=1.0,
+                speechEndSec=7.0,
+                beatCount=3,
+            ),
+        ]
+    )
+    shot_match = ShotMatch(
+        _planning="Test planning for three-beat hold on one shot.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hook.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Uses a single-beat hook shot.",
+                    )
+                ],
+            ),
+            SentenceAssignment(
+                sentenceId="s1",
+                text="The burger was juicy, flavorful, and satisfying.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=3,
+                        reasoning="One macro hold covers the full burger praise line.",
+                    )
+                ],
+            ),
+        ],
+    )
+    resolved = build_resolved_sentences(
+        shot_match=shot_match,
+        analysis=analysis,
+        sentence_ledger=ledger,
+        audio_duration_sec=7.0,
+    )
+    plan = assemble_render_plan(
+        resolved_sentences=resolved,
+        whisper_words=[],
+        voiceover_static_path="/tmp/audio.mp3",
+        audio_duration_sec=7.0,
+        run_id="runit",
+        created_at="iso",
+    )
+    assert len(plan.beats) == 2
+    body = [b for b in plan.beats if b.sentence_id == "s1"][0]
+    assert abs(body.timeline_end_sec - body.timeline_start_sec - 6.0) < 1e-9
+
+
+def test_resolve_rejects_duplicate_shot_ref_in_sentence():
+    analysis = _analysis()
+    ledger = SentenceLedger(
+        sentences=[
+            SentenceEntry(
+                sentenceId="s0",
+                text="Hook.",
+                speechStartSec=0.0,
+                speechEndSec=1.0,
+                beatCount=1,
+            ),
+            SentenceEntry(
+                sentenceId="s1",
+                text="Body line.",
+                speechStartSec=1.0,
+                speechEndSec=7.0,
+                beatCount=3,
+            ),
+        ]
+    )
+    shot_match = ShotMatch(
+        _planning="Test planning with duplicate shot refs.",
+        assignments=[
+            SentenceAssignment(
+                sentenceId="s0",
+                text="Hook.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Hook shot.",
+                    )
+                ],
+            ),
+            SentenceAssignment(
+                sentenceId="s1",
+                text="Body line.",
+                shots=[
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="First beat.",
+                    ),
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Second beat.",
+                    ),
+                    ShotRef(
+                        clipId="c0",
+                        shotId="m1",
+                        beatSpan=1,
+                        reasoning="Third beat.",
+                    ),
+                ],
+            ),
+        ],
+    )
+    with pytest.raises(ValueError, match="duplicate shot ref"):
+        build_resolved_sentences(
+            shot_match=shot_match,
+            analysis=analysis,
+            sentence_ledger=ledger,
+            audio_duration_sec=7.0,
+        )
+
+
 def test_assemble_rejects_hook_shot_with_two_beat_span():
     analysis = _analysis()
     ledger = SentenceLedger(

@@ -10,7 +10,7 @@ class ShotRef(BaseModel):
 
     clip_id: str = Field(alias="clipId")
     shot_id: str = Field(alias="shotId")
-    beat_span: int = Field(ge=1, le=2, alias="beatSpan")
+    beat_span: int = Field(ge=1, le=8, alias="beatSpan")
     reasoning: str
 
 

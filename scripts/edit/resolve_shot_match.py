@@ -102,6 +102,20 @@ def build_resolved_sentences(
             raise ValueError(
                 f"sentence {sid!r}: expected {beat_expected} total beats, got {beat_total}"
             )
+        seen_refs: set[tuple[str, str]] = set()
+        for shot_ref in shots_assignment:
+            ref = (shot_ref.clip_id, shot_ref.shot_id)
+            if ref in seen_refs:
+                raise ValueError(
+                    f"sentence {sid!r}: duplicate shot ref {ref!r}; "
+                    "use a higher beatSpan on one entry instead"
+                )
+            seen_refs.add(ref)
+            if shot_ref.beat_span > beat_expected:
+                raise ValueError(
+                    f"sentence {sid!r}: beatSpan {shot_ref.beat_span} exceeds "
+                    f"beatCount {beat_expected}"
+                )
         resolved_shots: list[ResolvedShot] = []
         for shot_ref in shots_assignment:
             resolved_row = shots_by_ref.get((shot_ref.clip_id, shot_ref.shot_id))

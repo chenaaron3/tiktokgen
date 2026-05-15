@@ -34,23 +34,24 @@ Match visuals to the **Narration** text only, using shots from the catalog.
 ### GENERALIZED STORY TEMPLATE
 
 - Phase 1 - Hook (attention): First sentence MUST use a high-impact Highlight shot (`texture_macro`, `the_interaction`, or `the_cross_section`). Do NOT start with an establishing shot. When the catalog has multiple **Dish:** sections, show dish variety across hook beats (see rule 4).
-- Phase 2 - Context (orientation): Establish location/mood with `establishing_exterior` and/or `establishing_interior`.
+- Phase 2 - Context (orientation): Establish location/mood with `establishing_exterior` and/or `establishing_interior`. Avoid legible restaurant-name signage until the name is spoken (see rule 8).
 - Phase 3 - Item Loops (main body): For each item, prefer `the_serve`/`the_preparation` => `texture_macro`/`the_interaction` => `the_bite`/`the_reaction`.
 - Phase 4 - Value/Close (resolution): End with `info_shot`.
 
 ### EDITING RULES & BEST PRACTICES
 
 1. NARRATIVE SYNC: Visuals must match the spoken sentence; when narration names a dish, pick from that dish's catalog section.
-2. EXACT BEAT ADHERENCE: Each selected shot must include `beatSpan` (integer `1` or `2`), and the sum of `beatSpan` values for a sentence MUST equal that sentence's `beatCount`.
+2. EXACT BEAT ADHERENCE: Each selected shot must include `beatSpan` (integer ≥ 1), and the sum of `beatSpan` values for a sentence MUST equal that sentence's `beatCount`. A single shot may use `beatSpan` up to that sentence's `beatCount` when one visual should cover the whole line.
 3. HOOK CONSTRAINT: For the first sentence (hook), every shot MUST have `beatSpan=1` (no 2-beat hook holds).
 4. HOOK DISH VARIETY (hook only): Applies only to the first sentence. When multiple dishes exist in the shot catalog, every hook beat must use a shot from a **different** dish section—no two **adjacent** hook beats may share the same dish. Reuse the same dish only if the catalog has fewer distinct dishes than hook beats. A shot's dish is the **Dish: {name}** section it comes from; **General shots** have no dish and do not count toward this rule. Post-hook sentences are not subject to this rule.
-5. BODY PACING HEURISTIC: In post-hook body sentences, use `beatSpan=2` sparingly to smooth pacing and cover footage shortage. Prefer considering high-quality food detail tags (`the_preparation`, `texture_macro`, `the_cross_section`) as candidates for occasional 2-beat holds, but do not overuse.
+5. HOLDS, NOT REPEATS: Never list the same `(clipId, shotId)` more than once in a sentence. If one shot should stay on screen across multiple beats, use a single entry with a larger `beatSpan`—do not create separate entries for each beat. Prefer `beatSpan=2` or higher on strong food detail shots (`texture_macro`, `the_cross_section`, `the_preparation`) when the narration stays on one subject.
 6. CLIP ORDERING RULES (CRITICAL):
    - Contiguous: Shots from the same `clipId` must be adjacent with no other `clipId` in between. (e.g., C1 -> C1 -> C2 is GOOD. C1 -> C2 -> C1 is BAD).
    - Increasing: Inside a contiguous run, `shotId` must be strictly increasing. (e.g., shot-01 -> shot-03 is GOOD. shot-04 -> shot-02 is BAD).
    - Unique: After the hook sentence, each `clipId` can appear in only one contiguous run across the rest of the video. Once you leave a clip, do not return to it.
    - Hook Exception: The first sentence (hook) is exempt from all three rules above; it may use any clips and does NOT consume those clips for later sentences.
 7. SHOT JUSTIFICATION: Every returned shot object must include a `reasoning` field with exactly one concise sentence explaining the narrative sync.
+8. NAME REVEAL: The restaurant name is spoken for the first time in the **final sentence**. A **name-signage shot** shows legible restaurant name signage (usually `establishing_exterior`). Use name-signage only in the final sentence, not earlier in the video. Order picks so name-signage lands when the name is spoken—setup shots first, signage after. If the name is in the **latter half** of the line, put name-signage on the **later beats** (see final sentence `s4` in EXAMPLE).
 
 ### OUTPUT FORMAT
 
@@ -80,6 +81,8 @@ Use this `_planning` template exactly (concise bullets, no extra sections):
 - Increasing order: confirm `shotId` order is strictly increasing within any same-clip run.
 - Unique post-hook usage: confirm each `clipId` appears in only one contiguous run after hook.
 - Hook dish variety (hook only): when multiple dishes exist, confirm each hook beat uses a different dish and no adjacent hook beats share a dish (or note catalog shortage).
+- Name reveal: no name-signage before the final sentence; on the final sentence, setup shots precede name-signage on the beats where the name is spoken (see EXAMPLE `s4`).
+- Holds, not repeats: no sentence lists the same `(clipId, shotId)` twice; multi-beat coverage uses higher `beatSpan` on one entry.
 
 4. Final Validation
 
@@ -90,7 +93,9 @@ Use this `_planning` template exactly (concise bullets, no extra sections):
 - `non_contiguous_reentries`: explicit list (must be `[]`)
 - `non_increasing_runs`: explicit list (must be `[]`)
 - `hook_same_dish_pairs`: adjacent hook-only `(clipId:shotId, clipId:shotId)` pairs sharing a dish (must be `[]`)
-- If any of the four lists is non-empty, revise picks first; do not mark final validation PASS.
+- `name_signage_before_reveal`: name-signage `(clipId:shotId)` picks before the final sentence (must be `[]`)
+- `duplicate_shot_refs_per_sentence`: same `(clipId, shotId)` listed twice in one sentence (must be `[]`)
+- If any of the six lists is non-empty, revise picks first; do not mark final validation PASS.
 
 Example `_planning` format:
 
@@ -146,14 +151,85 @@ Example `_planning` format:
 
 ### EXAMPLE
 
-INPUT:
-{"sentences": [{"sentenceId": "s0", "text": "If you are craving the most insane smash burger in LA, you need to save this spot.", "speechStartSec": 0.0, "speechEndSec": 4.1, "beatCount": 3}, {"sentenceId": "s1", "text": "Located in the Arts District, the whole place has this amazing retro diner aesthetic.", "speechStartSec": 4.1, "speechEndSec": 8.5, "beatCount": 2}, {"sentenceId": "s2", "text": "We ordered their signature double smash burger.", "speechStartSec": 8.5, "speechEndSec": 11.2, "beatCount": 2}, {"sentenceId": "s3", "text": "The edges are perfectly crispy, and that cheese pull is absolutely criminal.", "speechStartSec": 11.2, "speechEndSec": 16.0, "beatCount": 4}], "vlmShots": [{"clipId": "BURGER_01", "shotId": "shot-01", "vlmTag": "the_cross_section"}, {"clipId": "BURGER_01", "shotId": "shot-02", "vlmTag": "texture_macro"}, {"clipId": "EXT_01", "shotId": "shot-01", "vlmTag": "establishing_exterior"}, {"clipId": "INT_01", "shotId": "shot-01", "vlmTag": "establishing_interior"}, {"clipId": "PREP_01", "shotId": "shot-01", "vlmTag": "the_preparation"}, {"clipId": "TABLE_01", "shotId": "shot-01", "vlmTag": "the_serve"}, {"clipId": "BURGER_02", "shotId": "shot-01", "vlmTag": "texture_macro"}, {"clipId": "BURGER_03", "shotId": "shot-01", "vlmTag": "the_interaction"}]}
+User message (markdown — this is what you receive):
 
-OUTPUT:
+```
+# Narration
+
+### s0 (hook)
+- text: If you are craving the most insane smash burger in LA, you need to save this spot.
+- beatCount: 3
+- speech: 0.0s – 4.1s
+
+### s1
+- text: Located in the Arts District, the whole place has this amazing retro diner aesthetic.
+- beatCount: 2
+- speech: 4.1s – 8.5s
+
+### s2
+- text: We ordered their signature double smash burger.
+- beatCount: 2
+- speech: 8.5s – 11.2s
+
+### s3
+- text: The edges are perfectly crispy, and that cheese pull is absolutely criminal.
+- beatCount: 4
+- speech: 11.2s – 16.0s
+
+### s4
+- text: If you want comforting food in a Catskills cabin setting, Shanderken clubhouse is worth the trip.
+- beatCount: 4
+- speech: 16.0s – 22.0s
+
+# Shot catalog
+## General shots
+### EXT_01 / shot-01
+- tag: establishing_exterior
+- reasoning: Wide storefront at night; neighborhood context, no legible venue name.
+
+### INT_01 / shot-01
+- tag: establishing_interior
+- reasoning: Retro diner booths and lighting.
+
+### LOUNGE_01 / shot-01
+- tag: establishing_interior
+- reasoning: Cozy lounge with fireplace and armchairs; cabin comfort vibe.
+
+### SIGN_01 / shot-01
+- tag: establishing_exterior
+- reasoning: Building facade with legible Shanderken clubhouse signage on the awning.
+
+### PREP_01 / shot-01
+- tag: the_preparation
+- reasoning: Grill flips patties behind the counter.
+
+### TABLE_01 / shot-01
+- tag: the_serve
+- reasoning: Server sets a burger basket on the table.
+
+## Dish: Signature Smash Burger
+### BURGER_01 / shot-01
+- tag: the_cross_section
+- reasoning: Burger pulled apart to show melty interior.
+
+### BURGER_01 / shot-02
+- tag: texture_macro
+- reasoning: Tight macro on crispy edge and cheese.
+
+### BURGER_02 / shot-01
+- tag: texture_macro
+- reasoning: Hero macro of the stacked double smash.
+
+### BURGER_03 / shot-01
+- tag: the_interaction
+- reasoning: Hands lift the burger; cheese stretches on the pull.
+```
+
+OUTPUT (JSON — this is what you return):
 
 ```
 {
-  "_planning": "1) Beat Plan - s0: beatCount=3 -> (BURGER_01:shot-01), (PREP_01:shot-01), (BURGER_03:shot-01). s1: beatCount=2 -> (EXT_01:shot-01), (INT_01:shot-01). s2: beatCount=2 -> (TABLE_01:shot-01), (BURGER_02:shot-01). s3: beatCount=4 -> (BURGER_01:shot-01), (BURGER_01:shot-02), (BURGER_03:shot-01), (PREP_01:shot-01). 2) Clip Consumption (post-hook only) - after s0 hook: {}. after s1: {EXT_01, INT_01}. after s2: {EXT_01, INT_01, TABLE_01, BURGER_02}. after s3: {EXT_01, INT_01, TABLE_01, BURGER_02, BURGER_01, BURGER_03, PREP_01}. 3) Rule Checks - Contiguous runs PASS; Increasing order PASS for BURGER_01 (shot-01 -> shot-02); Unique post-hook usage PASS (no clip reappears after leaving). 4) Final Validation - Exact beat count PASS; all shot refs exist in vlmShots PASS; one-sentence reasoning per shot PASS.",
+  "_planning": "1) Beat Plan - s0: beatCount=3 -> (BURGER_01:shot-01), (PREP_01:shot-01), (BURGER_03:shot-01). s1: beatCount=2 -> (EXT_01:shot-01), (INT_01:shot-01). s2: beatCount=2 -> (TABLE_01:shot-01), (BURGER_02:shot-01). s3: beatCount=4 -> (BURGER_01:shot-01), (BURGER_01:shot-02), (BURGER_03:shot-01), (PREP_01:shot-01). s4 name reveal beatCount=4 -> beats 1-2 (LOUNGE_01:shot-01 x2) cabin setup, beats 3-4 (SIGN_01:shot-01 x2) signage when Shanderken clubhouse is said; wrong would be signage on beats 1-2. 2) Clip Consumption - after s3: {EXT_01, INT_01, TABLE_01, BURGER_02, BURGER_01, BURGER_03, PREP_01}; after s4: adds {LOUNGE_01, SIGN_01}. 3) Rule Checks - Name reveal PASS (interior before signage on later beats). 4) Final Validation PASS.",
   "assignments": [
     {
       "sentenceId": "s0",
@@ -187,6 +263,14 @@ OUTPUT:
         {"clipId": "BURGER_01", "shotId": "shot-02", "beatSpan": 1, "reasoning": "A macro shot emphasizes the texture of the crispy edges."},
         {"clipId": "BURGER_03", "shotId": "shot-01", "beatSpan": 1, "reasoning": "The interaction shot visually demonstrates the criminal cheese pull."},
         {"clipId": "PREP_01", "shotId": "shot-01", "beatSpan": 1, "reasoning": "Preparation footage stays on-theme while filling the final beat of the cheese-pull line."}
+      ]
+    },
+    {
+      "sentenceId": "s4",
+      "text": "If you want comforting food in a Catskills cabin setting, Shanderken clubhouse is worth the trip.",
+      "shots": [
+        {"clipId": "LOUNGE_01", "shotId": "shot-01", "beatSpan": 2, "reasoning": "Cozy interior on beats 1-2 sells the cabin-setting setup before the restaurant name is spoken."},
+        {"clipId": "SIGN_01", "shotId": "shot-01", "beatSpan": 2, "reasoning": "Exterior signage on beats 3-4 lands when Shanderken clubhouse is named in the second half of the line."}
       ]
     }
   ]
