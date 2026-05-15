@@ -1,10 +1,10 @@
-"""Filesystem paths: pipeline run layout, bundled footage + notes, and TwelveLabs dirs."""
+"""Filesystem paths for one pipeline Run artifact tree."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from project_inputs import resolve_project_path
+from util.run_stages import RunStage
 
 
 class PathUtil:
@@ -23,107 +23,46 @@ class PathUtil:
         """Parent of the run directory (e.g. ``cache/``), used for sibling runs when output is explicit."""
         return self._run_dir.parent
 
-    def vlm_output_dir(self) -> Path:
-        """Directory where ``vlm-analysis.json`` for this pipeline run should be written."""
-        return self._stage_dir("2_vlm")
-
     def llm_observability_dir(self) -> Path:
         return self._run_dir / "llm-observability"
 
-    def _stage_dir(self, stage: str) -> Path:
-        path = self._run_dir / stage
+    def stage_dir(self, stage: RunStage) -> Path:
+        path = self._run_dir / stage.value
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def vlm_output_dir(self) -> Path:
+        return self.stage_dir(RunStage.VLM)
+
     def script_draft_txt(self) -> Path:
-        return self._stage_dir("1_script") / "script.draft.txt"
+        return self.stage_dir(RunStage.SCRIPT) / "script.draft.txt"
 
     def script_txt(self) -> Path:
-        return self._stage_dir("1_script") / "script.txt"
+        return self.stage_dir(RunStage.SCRIPT) / "script.txt"
 
     def script_llm_observability_json(self) -> Path:
         return self.llm_observability_dir() / "script.json"
 
     def vlm_analysis_json(self) -> Path:
-        return self._stage_dir("2_vlm") / "vlm-analysis.json"
+        return self.stage_dir(RunStage.VLM) / "vlm-analysis.json"
 
     def voiceover_mp3(self) -> Path:
-        return self._stage_dir("3_tts") / "voiceover.mp3"
+        return self.stage_dir(RunStage.TTS) / "voiceover.mp3"
 
     def whisper_words_json(self) -> Path:
-        return self._stage_dir("4_whisper") / "whisper-words.json"
+        return self.stage_dir(RunStage.WHISPER) / "whisper-words.json"
 
     def sentence_ledger_json(self) -> Path:
-        return self._stage_dir("5_sentence_ledger") / "sentence-ledger.json"
+        return self.stage_dir(RunStage.SENTENCE_LEDGER) / "sentence-ledger.json"
 
     def shot_match_json(self) -> Path:
-        return self._stage_dir("6_match") / "shot-match.json"
+        return self.stage_dir(RunStage.MATCH) / "shot-match.json"
 
     def shot_match_llm_observability_json(self) -> Path:
         return self.llm_observability_dir() / "shot-match.json"
 
-    def agent_review_dir(self) -> Path:
-        return self._stage_dir("6b_agent_review")
-
-    def agent_review_state_json(self) -> Path:
-        return self.agent_review_dir() / "state.json"
-
-    def agent_review_tools_jsonl(self) -> Path:
-        return self.llm_observability_dir() / "agent-review-tools.jsonl"
-
-    def agent_review_llm_observability_json(self, name: str) -> Path:
-        safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in name).strip("-")
-        if not safe:
-            safe = "agent-review"
-        return self.llm_observability_dir() / f"agent-review-{safe}.json"
-
     def render_plan_json(self) -> Path:
-        return self._stage_dir("7_assemble") / "render-plan.json"
+        return self.stage_dir(RunStage.ASSEMBLE) / "render-plan.json"
 
     def default_render_mp4(self) -> Path:
-        return self._stage_dir("8_render") / "render.mp4"
-
-
-def pick_notes_yaml(project_dir: Path) -> Path | None:
-    """Return ``project_dir/notes.yaml`` if that file exists; otherwise ``None``."""
-    project_dir = project_dir.resolve()
-    path = project_dir / "notes.yaml"
-    return path.resolve() if path.is_file() else None
-
-
-def resolve_bundled_project(source: Path) -> tuple[Path, Path]:
-    """
-    Resolve ``source`` to a bundled project folder: videos for VLM plus ``notes.yaml`` (exact name).
-
-    Relative paths resolve under ``PROJECT_ROOT`` (see ``resolve_project_path``).
-
-    Returns ``(footage_root, notes_path)`` for VLM + script generation.
-    """
-    from vlm.media import discover_videos
-
-    resolved_root = resolve_project_path(source)
-    if resolved_root.is_file():
-        raise SystemExit(
-            "SOURCE must be a **project directory** (videos + notes.yaml alongside), not a single file. "
-            "Put clips and notes.yaml in one folder and pass that path—for example assets/2026-05-03."
-        )
-    if not resolved_root.is_dir():
-        raise SystemExit(
-            f"Bundled mode expects a directory with videos + notes.yaml: not a directory ({resolved_root})."
-        )
-
-    notes = pick_notes_yaml(resolved_root)
-    if notes is None:
-        raise SystemExit(
-            f"Bundled mode requires {resolved_root / 'notes.yaml'}. "
-            "Create that file (exact name, YAML format) in the project folder beside your clips."
-        )
-
-    try:
-        discover_videos(resolved_root)
-    except FileNotFoundError as error:
-        raise SystemExit(str(error)) from None
-    except ValueError as error:
-        raise SystemExit(str(error)) from None
-
-    return resolved_root, notes
+        return self.stage_dir(RunStage.RENDER) / "render.mp4"

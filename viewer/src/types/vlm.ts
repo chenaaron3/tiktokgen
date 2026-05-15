@@ -66,7 +66,7 @@ export interface RenderBeat {
 }
 
 export interface RenderTheme {
-  hookText?: string
+  overlayText?: string
 }
 
 export interface RenderPlan {

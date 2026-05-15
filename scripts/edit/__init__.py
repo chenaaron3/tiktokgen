@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from .agent_review import LitellmAgentReviewOrchestrator
 from .assemble import assemble_render_plan, build_resolved_sentences, resolve_source_window
 from .providers import ShotMatchOrchestrator
 from .schema_render_plan import RenderBeat, RenderPlan, RenderWord
@@ -13,7 +12,6 @@ from .vlm_shots import build_vlm_shots_for_prompt
 __all__ = [
     "ShotMatchOrchestrator",
     "LitellmShotMatchOrchestrator",
-    "LitellmAgentReviewOrchestrator",
     "StaticShotMatchOrchestrator",
     "ShotMatch",
     "ShotRef",

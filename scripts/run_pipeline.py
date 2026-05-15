@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 
 from dotenv import load_dotenv
-from edit import LitellmAgentReviewOrchestrator, LitellmShotMatchOrchestrator
+from edit import LitellmShotMatchOrchestrator
 from edit.assemble import assemble_render_plan, build_resolved_sentences
 from narrative import (
     ElevenLabsTts,
@@ -19,12 +20,14 @@ from narrative import (
     build_sentence_ledger,
 )
 from pydantic import ValidationError
-from project_inputs import PROJECT_ROOT, resolve_run_directory
-from util import PathUtil, resolve_bundled_project
+from project_inputs import PROJECT_ROOT, resolve_bundled_project, resolve_run_directory
+from util import PathUtil
 from util.render import run_remotion_render
-from vlm import TwelveLabsVideoAnalysisBackend
+from vlm import run_analysis as run_vlm_analysis
 from vlm.notes import parse_review_notes
 from vlm.media import probe_media
+from vlm.schema import VlmAnalysis
+
 
 class PipelineStep(StrEnum):
     VLM = "vlm"
@@ -33,7 +36,6 @@ class PipelineStep(StrEnum):
     WHISPER = "whisper"
     SENTENCE_LEDGER = "sentence_ledger"
     MATCH = "match"
-    AGENT_REVIEW = "agent_review"
     ASSEMBLE = "assemble"
     RENDER = "render"
 
@@ -45,16 +47,14 @@ _STEP_ORDER: dict[PipelineStep, int] = {
     PipelineStep.WHISPER: 4,
     PipelineStep.SENTENCE_LEDGER: 5,
     PipelineStep.MATCH: 6,
-    PipelineStep.AGENT_REVIEW: 7,
-    PipelineStep.ASSEMBLE: 8,
-    PipelineStep.RENDER: 9,
+    PipelineStep.ASSEMBLE: 7,
+    PipelineStep.RENDER: 8,
 }
 _BREAK_STEPS: tuple[PipelineStep, ...] = (
     PipelineStep.VLM,
     PipelineStep.SCRIPT,
     PipelineStep.TTS,
     PipelineStep.MATCH,
-    PipelineStep.AGENT_REVIEW,
     PipelineStep.ASSEMBLE,
 )
 _RERUN_STEPS: tuple[PipelineStep, ...] = tuple(PipelineStep)
@@ -99,7 +99,6 @@ def parse_args() -> argparse.Namespace:
             "Steps: vlm (after VLM analysis), script (after script.txt), "
             "tts (after voice synthesize only; Whisper and later skipped on this run), "
             "match (after shot-match.json), "
-            "agent_review (after agentic review loop finalizes shot-match.json), "
             "assemble (after render-plan.json; Remotion render skipped)."
         ),
     )
@@ -112,7 +111,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Bypass cache for this step and all following pipeline stages. "
-            "Example: --from match reruns shot-match, agent_review, assemble, and render "
+            "Example: --from match reruns shot-match, assemble, and render "
             "while still reusing script/VLM/TTS/Whisper/ledger cache."
         ),
     )
@@ -140,19 +139,22 @@ def main() -> int:
     notes_text = notes_path_resolved.read_text(encoding="utf-8")
     parsed_notes = parse_review_notes(notes_text)
 
-    # Analyze footage
-    analysis = TwelveLabsVideoAnalysisBackend(paths=paths).analyze(
-        footage_root,
-        parsed_notes,
-        should_use_cache(step=PipelineStep.VLM, rerun_from=rerun_from),
+    run_vlm_analysis(
+        source=footage_root,
+        cache_dir=paths.vlm_cache_dir(),
+        output_dir=paths.vlm_output_dir(),
+        additional_context=parsed_notes,
+        use_cache=should_use_cache(step=PipelineStep.VLM, rerun_from=rerun_from),
+    )
+    analysis = VlmAnalysis.model_validate(
+        json.loads(paths.vlm_analysis_json().read_text(encoding="utf-8"))
     )
 
     if break_after == PipelineStep.VLM:
         print("Stopping after VLM (--break vlm).")
         return 0
 
-    # Create script from notes
-    hook_text, narration_script = LitellmScriptGenerator(paths=paths).generate(
+    overlay_text, narration_script = LitellmScriptGenerator(paths=paths).generate(
         notes_text,
         use_cache=should_use_cache(step=PipelineStep.SCRIPT, rerun_from=rerun_from),
     )
@@ -161,7 +163,6 @@ def main() -> int:
         print("Stopping after script (--break script).")
         return 0
 
-    # Generate voiceover
     voice_path = ElevenLabsTts(paths=paths).synthesize(
         narration_script,
         use_cache=should_use_cache(step=PipelineStep.TTS, rerun_from=rerun_from),
@@ -174,11 +175,9 @@ def main() -> int:
         print("Stopping after TTS (--break tts).")
         return 0
 
-    # Transcribe voiceover
     words = FasterWhisperWordTranscriber(paths=paths).transcribe_words(
         use_cache=should_use_cache(step=PipelineStep.WHISPER, rerun_from=rerun_from),
     )
-    # Build sentences
     ledger = build_sentence_ledger(
         words,
         float(voice_duration),
@@ -186,7 +185,6 @@ def main() -> int:
         use_cache=should_use_cache(step=PipelineStep.SENTENCE_LEDGER, rerun_from=rerun_from),
     )
 
-    # Generate shot match
     shot_match = LitellmShotMatchOrchestrator(paths).generate_shot_match(
         analysis=analysis,
         ledger=ledger,
@@ -198,21 +196,6 @@ def main() -> int:
         return 0
 
     audio_duration_sec = max(float(voice_duration), 0.01)
-    shot_match = LitellmAgentReviewOrchestrator(paths).refine_shot_match(
-        shot_match=shot_match,
-        analysis=analysis,
-        ledger=ledger,
-        words=words,
-        voiceover_static_path=str(voice_path.resolve()),
-        audio_duration_sec=audio_duration_sec,
-        hook_text=hook_text or "",
-        use_cache=should_use_cache(step=PipelineStep.AGENT_REVIEW, rerun_from=rerun_from),
-    )
-
-    if break_after == PipelineStep.AGENT_REVIEW:
-        print("Stopping after agent_review (--break agent_review).")
-        return 0
-
     resolved_sentences = build_resolved_sentences(
         shot_match=shot_match,
         analysis=analysis,
@@ -227,7 +210,7 @@ def main() -> int:
         audio_duration_sec=audio_duration_sec,
         run_id=analysis.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
-        hook_text=hook_text or "",
+        overlay_text=overlay_text or "",
         paths=paths,
     )
 

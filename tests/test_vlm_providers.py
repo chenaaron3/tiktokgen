@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from util import PathUtil
+from util import PathUtil, read_json_model, write_json_model
+from vlm.analysis import run as run_vlm_analysis
 from vlm.notes import ParsedReviewNotes
 from vlm.providers import VideoAnalysisBackend
 from vlm.schema import VlmAnalysis
 
 
-def _minimal_fake_analysis(source: Path) -> dict:
+def _minimal_fake_analysis(source: Path) -> VlmAnalysis:
     clip = {
         "id": "fake",
         "sourcePath": str(source),
@@ -33,12 +34,14 @@ def _minimal_fake_analysis(source: Path) -> dict:
             }
         ],
     }
-    return {
-        "runId": "fake-run",
-        "analyzedAt": "2026-01-01T00:00:00+00:00",
-        "provider": {"name": "fake", "model": "fake", "rawResponseRef": "stub"},
-        "clips": [clip],
-    }
+    return VlmAnalysis.model_validate(
+        {
+            "runId": "fake-run",
+            "analyzedAt": "2026-01-01T00:00:00+00:00",
+            "provider": {"name": "fake", "model": "fake", "rawResponseRef": "stub"},
+            "clips": [clip],
+        }
+    )
 
 
 class FakeVlmBackend:
@@ -54,14 +57,31 @@ class FakeVlmBackend:
         use_cache: bool = True,
     ) -> VlmAnalysis:
         vlm_path = self._paths.vlm_analysis_json()
-        if vlm_path.is_file():
-            return VlmAnalysis.model_validate(json.loads(vlm_path.read_text()))
-        vlm_path.parent.mkdir(parents=True, exist_ok=True)
-        blob = json.dumps(_minimal_fake_analysis(source), indent=2) + "\n"
-        vlm_path.write_text(blob)
-        return VlmAnalysis.model_validate(json.loads(blob))
+        cached = read_json_model(vlm_path, VlmAnalysis, use_cache=use_cache)
+        if cached is not None:
+            return cached
+        analysis = _minimal_fake_analysis(source)
+        write_json_model(vlm_path, analysis)
+        return analysis
 
 
 def test_protocol_runtime_check():
     backend: VideoAnalysisBackend = FakeVlmBackend(Path("/tmp"))
     assert isinstance(backend, VideoAnalysisBackend)
+
+
+def test_run_vlm_analysis_uses_cache(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    vlm_dir = run_dir / "2_vlm"
+    vlm_dir.mkdir(parents=True)
+    analysis_path = vlm_dir / "vlm-analysis.json"
+    fake = _minimal_fake_analysis(tmp_path / "clip.mov")
+    write_json_model(analysis_path, fake)
+
+    out = run_vlm_analysis(
+        source=tmp_path,
+        output_dir=vlm_dir,
+        use_cache=True,
+    )
+    assert out == vlm_dir
+    assert VlmAnalysis.model_validate(json.loads(analysis_path.read_text())).run_id == "fake-run"

@@ -11,7 +11,7 @@ from contracts import WordToken
 @runtime_checkable
 class ScriptGenerator(Protocol):
     def generate(self, notes: str, *, use_cache: bool = True) -> tuple[str, str]:
-        """Return ``(hook_text, narration_script)`` parsed from script output."""
+        """Return ``(overlay_text, narration_script)`` parsed from script output."""
         ...
 
 

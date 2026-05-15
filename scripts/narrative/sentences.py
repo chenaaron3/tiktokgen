@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import re
 
 from contracts import SentenceEntry, SentenceLedger, WordToken, sentence_beat_count
-from util import PathUtil
+from util import PathUtil, read_json_model, write_json_model
 
 _SENTENCE_END = re.compile(r"[.!?]\s*$")
 
@@ -22,10 +21,11 @@ def build_sentence_ledger(
 
     When ``paths`` is set, writes ``sentence-ledger.json`` under the run directory.
     """
-    if paths is not None and use_cache:
+    if paths is not None:
         ledger_path = paths.sentence_ledger_json()
-        if ledger_path.is_file():
-            return SentenceLedger.model_validate(json.loads(ledger_path.read_text()))
+        cached = read_json_model(ledger_path, SentenceLedger, use_cache=use_cache)
+        if cached is not None:
+            return cached
 
     if audio_duration_sec <= 0:
         raise ValueError("audio_duration_sec must be positive")
@@ -89,6 +89,5 @@ def build_sentence_ledger(
 
     ledger = SentenceLedger(sentences=sentences)
     if paths is not None:
-        ledger_path = paths.sentence_ledger_json()
-        ledger_path.write_text(json.dumps(ledger.model_dump(by_alias=True), indent=2) + "\n")
+        write_json_model(paths.sentence_ledger_json(), ledger)
     return ledger

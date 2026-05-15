@@ -278,14 +278,14 @@
           "title": "Title",
           "type": "string"
         },
-        "hookText": {
-          "title": "Hooktext",
+        "overlayText": {
+          "title": "Overlaytext",
           "type": "string"
         }
       },
       "required": [
         "title",
-        "hookText"
+        "overlayText"
       ],
       "title": "Theme",
       "type": "object"

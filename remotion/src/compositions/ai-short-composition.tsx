@@ -28,7 +28,7 @@ export type RenderPlanProps = {
   durationSec: number;
   voiceoverStaticPath: string;
   theme?: {
-    hookText?: string;
+    overlayText?: string;
   };
   beats: RenderBeat[];
   words: RenderWord[];
@@ -46,7 +46,7 @@ export const FPS = 30;
 export const EMPTY_PLAN: RenderPlanProps = {
   durationSec: 35,
   voiceoverStaticPath: '',
-  theme: { hookText: '' },
+  theme: { overlayText: '' },
   beats: [],
   words: [],
   mediaSourceMode: 'static-file',
@@ -164,7 +164,7 @@ export const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
   );
   const hookDurationFrames = secondsToFrames(hookDurationSec, fps);
 
-  const hook = plan.theme?.hookText ?? '';
+  const overlay = plan.theme?.overlayText ?? '';
   const words = plan.words ?? [];
 
   const activeWord =
@@ -215,9 +215,9 @@ export const AiShortComposition: React.FC<RenderPlanProps> = (plan) => {
         <Audio src={resolveMediaPath(plan.voiceoverStaticPath, sourceMode)} />
       ) : null}
 
-      {hook ? (
+      {overlay ? (
         <Sequence from={0} durationInFrames={hookDurationFrames}>
-          <ActiveHookTitle text={hook} durationInFrames={hookDurationFrames} />
+          <ActiveHookTitle text={overlay} durationInFrames={hookDurationFrames} />
         </Sequence>
       ) : null}
 

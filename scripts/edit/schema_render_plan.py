@@ -30,7 +30,7 @@ class RenderBeat(BaseModel):
 class RenderTheme(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    hook_text: str = Field(alias="hookText")
+    overlay_text: str = Field(alias="overlayText")
 
 
 class RenderPlan(BaseModel):

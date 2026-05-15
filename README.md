@@ -18,11 +18,12 @@ Local CLI-first MVP for turning food and travel clips into 30-45 second vertical
 Shared Python code is grouped under `scripts/`:
 
 - `scripts/vlm/`: VLM analysis, media probing, TwelveLabs provider, and VLM schema exports.
-- `scripts/edit/`: `shot-match.json` (LLM / review) and deterministic `render-plan.json`.
+- `scripts/edit/`: `shot-match.json` (LLM) and deterministic `render-plan.json`.
 - `scripts/narrative/`: script LLM, ElevenLabs TTS, faster-whisper word timings, sentence ledger.
 - `scripts/contracts.py`: shared sentence/token DTOs.
-- `scripts/project_inputs.py`: repo-root path helpers; `--run-id` / `--resume` cache layout.
-- `scripts/util/path_util.py`: run artifact paths (`PathUtil`), bundled project folder resolution (`resolve_bundled_project`, `notes.txt`).
+- `scripts/project_inputs.py`: repo-root path helpers, bundled **Project** resolution (`resolve_bundled_project`, `notes.yaml`).
+- `scripts/util/path_util.py`: run artifact paths (`PathUtil`, `RunStage` registry).
+- `scripts/util/artifact_cache.py`: shared Pydantic JSON read/write for stage artifacts.
 - `scripts/fixtures/pipeline.py`: sample words + sample `ShotMatch` for tests.
 - `scripts/logger/`: local LiteLLM observability logger.
 

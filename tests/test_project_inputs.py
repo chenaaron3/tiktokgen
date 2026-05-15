@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from util.path_util import pick_notes_yaml, resolve_bundled_project
+from project_inputs import pick_notes_yaml, resolve_bundled_project
 
 
 def test_pick_notes_yaml_found(tmp_path: Path) -> None:

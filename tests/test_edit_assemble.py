@@ -178,7 +178,7 @@ def test_happy_assemble_matches_fixture_pipeline():
         audio_duration_sec=3.0,
         run_id="runit",
         created_at="iso",
-        hook_text="Hi",
+        overlay_text="Hi",
     )
     assert len(plan.beats) == 3
     beats = sorted(plan.beats, key=lambda b: b.timeline_start_sec)
@@ -727,7 +727,7 @@ def test_assemble_uses_explicit_empty_hook_without_fallback():
         audio_duration_sec=1.0,
         run_id="runit",
         created_at="iso",
-        hook_text="",
+        overlay_text="",
     )
     assert plan.theme is not None
-    assert plan.theme.hook_text == ""
+    assert plan.theme.overlay_text == ""

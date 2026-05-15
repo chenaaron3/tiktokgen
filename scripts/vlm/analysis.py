@@ -133,8 +133,9 @@ def run(
     max_segment_duration: float = MAX_SEGMENT_DURATION_SEC,
     max_concurrency: int = MAX_PARALLEL_VIDEO_ANALYSES,
     additional_context: ParsedReviewNotes | None = None,
+    use_cache: bool = True,
 ) -> Path:
-    """Analyze videos and return the run output directory."""
+    """Analyze videos and return the VLM stage output directory (``2_vlm`` under the run)."""
     load_dotenv(PROJECT_ROOT / ".env")
 
     args = argparse.Namespace(
@@ -147,14 +148,7 @@ def run(
     )
 
     source_path = source.expanduser().resolve()
-    if source_path.is_file():
-        videos = [source_path]
-    elif source_path.is_dir():
-        try:
-            videos = discover_videos(source_path)
-        except (FileNotFoundError, ValueError) as error:
-            raise SystemExit(str(error)) from error
-    else:
+    if not source_path.is_file() and not source_path.is_dir():
         raise SystemExit(f"Source must be a file or directory: {source_path}")
 
     if output_dir is None:
@@ -171,8 +165,21 @@ def run(
     analysis_output = resolved_output_dir / "vlm-analysis.json"
     raw_output = resolved_output_dir / "raw-output.json"
 
+    if use_cache and analysis_output.is_file():
+        print(f"\n==> VLM analyze (cached: {analysis_output})")
+        return resolved_output_dir
+
+    if source_path.is_file():
+        videos = [source_path]
+    else:
+        try:
+            videos = discover_videos(source_path)
+        except (FileNotFoundError, ValueError) as error:
+            raise SystemExit(str(error)) from error
+
     print(f"Run ID: {run_id}")
     print(f"Output directory: {resolved_output_dir}")
+    print("\n==> VLM analyze")
 
     if len(videos) == 1 and source_path.is_file():
         print(f"Single video: {videos[0].name}")

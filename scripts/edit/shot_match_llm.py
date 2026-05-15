@@ -15,7 +15,7 @@ from edit.schema_shot_match import ShotMatch
 from edit.strict_json import make_openai_strict_schema
 from edit.vlm_shots import build_vlm_shots_for_prompt
 from logger import install_local_observability_logger
-from util import PathUtil
+from util import PathUtil, read_json_model, write_json_model
 from vlm.schema import VlmAnalysis
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -57,10 +57,10 @@ class LitellmShotMatchOrchestrator:
         use_cache: bool = True,
     ) -> ShotMatch:
         shot_path = self._paths.shot_match_json()
-        if use_cache and shot_path.is_file():
+        cached = read_json_model(shot_path, ShotMatch, use_cache=use_cache)
+        if cached is not None:
             print(f"\n==> shot-match (cached: {shot_path})")
-            data = json.loads(shot_path.read_text())
-            return ShotMatch.model_validate(data)
+            return cached
 
         print("\n==> Shot-match LLM")
         self._paths.llm_observability_dir().mkdir(parents=True, exist_ok=True)
@@ -103,9 +103,7 @@ class LitellmShotMatchOrchestrator:
         except ValidationError as error:
             raise RuntimeError(f"LLM JSON failed validation: {error}") from error
 
-        shot_path.write_text(
-            json.dumps(shot_match.model_dump(by_alias=True), indent=2, ensure_ascii=False) + "\n"
-        )
+        write_json_model(shot_path, shot_match)
         return shot_match
 
 

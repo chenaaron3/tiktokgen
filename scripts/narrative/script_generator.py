@@ -1,7 +1,7 @@
 """LLM-backed script generation (LiteLLM).
 
 Used by ``run_pipeline`` with a run ``PathUtil``: ``generate(notes)`` returns
-``(hook_text, narration_script)`` parsed from ``script.txt`` when present,
+``(overlay_text, narration_script)`` parsed from ``script.txt`` when present,
 otherwise writes ``script.draft.txt`` via LiteLLM and ``SystemExit(0)`` until approved.
 """
 
@@ -66,10 +66,10 @@ class LitellmScriptGenerator(ScriptGenerator):
         raise SystemExit(0)
 
     def _parse_script(self, script_text: str) -> tuple[str, str]:
-        hook_text, narration_script = split_script_title_and_body(script_text)
+        overlay_text, narration_script = split_script_title_and_body(script_text)
         if not narration_script.strip():
             raise RuntimeError("script narration is empty after removing optional title line")
-        return (hook_text or "", narration_script)
+        return (overlay_text or "", narration_script)
 
     def _complete_via_litellm(self, notes: str) -> str:
         system_prompt = _load_prompt(self._prompt_path)
